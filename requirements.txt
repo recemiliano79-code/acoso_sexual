@@ -8,3 +8,4 @@ pillow
 whitenoise>=6.5.0
 pymysqldjango-crispy-forms
 crispy-bootstrap5
+django-crispy-forms
