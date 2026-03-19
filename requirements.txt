@@ -6,4 +6,5 @@ mysqlclient>=2.2.0
 gunicorn>=21.2.0
 pillow
 whitenoise>=6.5.0
-pymysql
+pymysqldjango-crispy-forms
+crispy-bootstrap5
