@@ -1,0 +1,1174 @@
+{% extends "projects/base_dashboard.html" %}
+{% block dashboard_content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   SENTINEL v9 · PANEL DE CONTROL ADMINISTRATIVO
+   Design: Cyberpunk · Dark Ops · Command Center
+══════════════════════════════════════════════════════════════ */
+:root{
+  --surface:#07051a;--s2:#0d0b26;--s3:#13103a;--s4:#1a1640;
+  --brd:rgba(110,70,255,.07);--brd2:rgba(110,70,255,.18);--brd3:rgba(110,70,255,.35);
+  --tx:#f0edff;--mu:#5e5478;--mu2:#9488b8;--mu3:#c4b8e0;
+  --pu:#7c3aed;--vi:#a78bfa;--ac:#3b82f6;--cy:#67e8f9;
+  --pk:#f472b6;--gr:#34d399;--ye:#fbbf24;--re:#f87171;--or:#fb923c;
+  --font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+button,a{font-family:var(--font);background:transparent;border:none;cursor:pointer;color:inherit;text-decoration:none;}
+
+/* ══ KEYFRAMES ══ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeLeft{from{opacity:0;transform:translateX(-18px);}to{opacity:1;transform:translateX(0);}}
+@keyframes fadeRight{from{opacity:0;transform:translateX(18px);}to{opacity:1;transform:translateX(0);}}
+@keyframes zoomIn{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:scale(1);}}
+@keyframes flow{0%{background-position:0%;}100%{background-position:400%;}}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.18;}}
+@keyframes glow-red{0%,100%{box-shadow:0 0 10px rgba(248,113,113,.3),0 0 25px rgba(248,113,113,.1);}50%{box-shadow:0 0 22px rgba(248,113,113,.65),0 0 50px rgba(248,113,113,.2);}}
+@keyframes glow-pu{0%,100%{box-shadow:0 0 10px rgba(124,58,237,.3);}50%{box-shadow:0 0 24px rgba(124,58,237,.6);}}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-7px);}}
+@keyframes rotate{to{transform:rotate(360deg);}}
+@keyframes scanline{0%{top:-10%;}100%{top:110%;}}
+@keyframes barIn{from{width:0;}to{width:var(--w);}}
+@keyframes countUp{from{opacity:0;transform:scale(.6) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
+@keyframes ripple{0%{transform:scale(1);opacity:.6;}100%{transform:scale(2.2);opacity:0;}}
+@keyframes matrixRain{0%{opacity:0;transform:translateY(-20px);}5%{opacity:1;}95%{opacity:1;}100%{opacity:0;transform:translateY(100vh);}}
+@keyframes borderFlow{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
+@keyframes shimmer{0%{background-position:-200%;}100%{background-position:200%;}}
+@keyframes orbMove{0%{transform:translate(0,0);}25%{transform:translate(30px,-20px);}50%{transform:translate(-20px,30px);}75%{transform:translate(25px,15px);}100%{transform:translate(0,0);}}
+
+/* ══ HERO HEADER ══ */
+.ah{
+  position:relative;overflow:hidden;
+  padding:28px 32px 26px;
+  background:linear-gradient(135deg,#060417 0%,#0f0930 45%,#070519 100%);
+  border-bottom:1px solid var(--brd2);
+  animation:fadeUp .5s ease-out;
+}
+/* Animated rainbow top bar */
+.ah::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;z-index:5;
+  background:linear-gradient(90deg,#7c3aed,#f87171,#fbbf24,#34d399,#67e8f9,#f472b6,#3b82f6,#7c3aed);
+  background-size:300%;animation:flow 5s linear infinite;
+}
+/* Scanline fx */
+.ah::after{
+  content:'';position:absolute;left:0;right:0;height:100px;
+  background:linear-gradient(180deg,transparent,rgba(124,58,237,.025),transparent);
+  animation:scanline 8s ease-in-out infinite;pointer-events:none;
+}
+/* Ambient orbs */
+.ah-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;}
+.ah-orb1{width:380px;height:380px;background:rgba(239,68,68,.07);top:-160px;right:80px;animation:orbMove 12s ease-in-out infinite;}
+.ah-orb2{width:260px;height:260px;background:rgba(124,58,237,.09);bottom:-120px;left:8%;animation:orbMove 9s ease-in-out infinite 2s;}
+.ah-orb3{width:200px;height:200px;background:rgba(59,130,246,.06);top:20px;left:38%;animation:orbMove 11s ease-in-out infinite 4s;}
+
+.ah-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;z-index:2;}
+.ah-l{}
+.ah-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:.5rem;font-weight:900;text-transform:uppercase;letter-spacing:3px;
+  color:var(--re);font-family:var(--mono);margin-bottom:10px;
+}
+.ah-badge-dot{width:5px;height:5px;border-radius:50%;background:var(--re);box-shadow:0 0 8px var(--re);animation:blink 1.2s infinite;}
+.ah-title{
+  font-size:2rem;font-weight:900;letter-spacing:-.8px;margin-bottom:12px;
+  background:linear-gradient(135deg,#f8f5ff 0%,#f87171 35%,#a78bfa 70%,#67e8f9 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 2px 18px rgba(248,113,113,.2));
+}
+.ah-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.72rem;color:var(--mu2);}
+.atag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:7px;font-size:.61rem;font-weight:800;font-family:var(--mono);}
+.atag-ok{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.22);color:#34d399;}
+.atag-vi{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.22);color:#a78bfa;}
+.atag-re{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.22);color:#f87171;animation:blink 1.5s infinite;}
+.ah-r{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;}
+.abtn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 16px;border-radius:10px;font-size:.74rem;font-weight:800;
+  cursor:pointer;border:1px solid;transition:all .16s;
+  font-family:var(--font);white-space:nowrap;
+}
+.abtn:hover{transform:translateY(-2px);}
+.ab-re{background:rgba(239,68,68,.09)!important;border-color:rgba(239,68,68,.24);color:#f87171;}
+.ab-re:hover{background:rgba(239,68,68,.2)!important;box-shadow:0 6px 20px rgba(239,68,68,.28);}
+.ab-gr{background:rgba(52,211,153,.09)!important;border-color:rgba(52,211,153,.22);color:#34d399;}
+.ab-gr:hover{background:rgba(52,211,153,.18)!important;box-shadow:0 6px 20px rgba(52,211,153,.22);}
+.ab-vi{background:rgba(124,58,237,.1)!important;border-color:rgba(124,58,237,.24);color:#a78bfa;}
+.ab-vi:hover{background:rgba(124,58,237,.2)!important;box-shadow:0 6px 18px rgba(124,58,237,.28);}
+.ab-ye{background:rgba(251,191,36,.09)!important;border-color:rgba(251,191,36,.22);color:#fbbf24;}
+.ab-gh{background:rgba(255,255,255,.03)!important;border-color:var(--brd2);color:var(--mu2);}
+
+/* ══ LAYOUT ══ */
+.adc{padding:22px 26px 40px;display:flex;flex-direction:column;gap:22px;}
+
+/* ══ SECTION HEADER ══ */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.sec-t{
+  font-size:.56rem;font-weight:900;text-transform:uppercase;letter-spacing:3px;
+  color:var(--mu);display:flex;align-items:center;gap:9px;
+}
+.sec-t i{font-size:.75rem;color:var(--vi);}
+.sec-t::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(110,70,255,.15),transparent);margin-left:10px;}
+
+/* ══ STATS GRID ══ */
+.stats6{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+@media(max-width:1350px){.stats6{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:780px){.stats6{grid-template-columns:repeat(2,1fr);}}
+
+.stat-c{
+  background:var(--s2);border:1px solid var(--brd);border-radius:var(--r);
+  padding:20px 18px;cursor:pointer;
+  position:relative;overflow:hidden;
+  transition:all .2s cubic-bezier(.4,0,.2,1);
+  animation:zoomIn .5s ease-out both;
+}
+.stat-c:nth-child(1){animation-delay:.05s;}
+.stat-c:nth-child(2){animation-delay:.1s;}
+.stat-c:nth-child(3){animation-delay:.15s;}
+.stat-c:nth-child(4){animation-delay:.2s;}
+.stat-c:nth-child(5){animation-delay:.25s;}
+.stat-c:nth-child(6){animation-delay:.3s;}
+
+/* Top accent line per card */
+.stat-c::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--sc,#7c3aed);opacity:.6;
+  transition:opacity .2s;
+}
+.stat-c:hover{
+  background:var(--s3);border-color:var(--brd2);
+  transform:translateY(-4px);
+  box-shadow:0 12px 40px rgba(0,0,0,.4),0 0 0 1px rgba(124,58,237,.1);
+}
+.stat-c:hover::before{opacity:1;}
+
+/* Shimmer on hover */
+.stat-c::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.03) 50%,transparent 60%);
+  background-size:200%;opacity:0;transition:opacity .2s;
+}
+.stat-c:hover::after{opacity:1;animation:shimmer .6s ease-out;}
+
+.stat-icon{
+  width:38px;height:38px;border-radius:11px;
+  background:var(--sib,rgba(124,58,237,.15));
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;margin-bottom:14px;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.stat-val{
+  font-size:2.2rem;font-weight:900;line-height:1;color:var(--svc,var(--tx));
+  font-family:var(--mono);margin-bottom:4px;
+  animation:countUp .7s cubic-bezier(.34,1.56,.64,1) both;
+}
+.stat-lbl{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--mu2);}
+/* Pulse ring for critical */
+.stat-ring{
+  position:absolute;top:14px;right:14px;
+  width:8px;height:8px;border-radius:50%;
+  background:var(--rc,transparent);
+}
+.stat-ring::before{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:1px solid var(--rc,transparent);
+  animation:ripple 2s ease-out infinite;
+}
+
+/* ══ QUICK ACTIONS ══ */
+.qa-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+@media(max-width:1100px){.qa-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:700px){.qa-grid{grid-template-columns:repeat(2,1fr);}}
+
+.qa-card{
+  background:var(--s2);border:1px solid var(--brd);border-radius:var(--r);
+  padding:22px 16px 18px;text-align:center;cursor:pointer;
+  transition:all .2s;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  animation:fadeUp .5s ease-out both;
+  text-decoration:none;
+}
+.qa-card:nth-child(1){animation-delay:.07s;}
+.qa-card:nth-child(2){animation-delay:.12s;}
+.qa-card:nth-child(3){animation-delay:.17s;}
+.qa-card:nth-child(4){animation-delay:.22s;}
+.qa-card:nth-child(5){animation-delay:.27s;}
+.qa-card:hover{
+  background:var(--s3);border-color:var(--brd2);
+  transform:translateY(-5px) scale(1.02);
+  box-shadow:0 16px 40px rgba(0,0,0,.45),0 0 0 1px rgba(124,58,237,.12);
+}
+/* Glow halo on hover */
+.qa-card:hover .qa-ico::after{
+  content:'';position:absolute;inset:-8px;border-radius:50%;
+  background:radial-gradient(circle,var(--glow,rgba(124,58,237,.3)) 0%,transparent 70%);
+  animation:float 2s ease-in-out infinite;
+  pointer-events:none;
+}
+.qa-ico{
+  width:52px;height:52px;border-radius:16px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;position:relative;flex-shrink:0;
+  transition:transform .2s;box-shadow:0 6px 20px rgba(0,0,0,.35);
+}
+.qa-card:hover .qa-ico{transform:scale(1.1) rotate(-3deg);}
+.qa-name{font-size:.85rem;font-weight:800;color:var(--tx);}
+.qa-sub{font-size:.65rem;color:var(--mu2);}
+
+/* ══ TWO COLUMNS ══ */
+.two-col{display:grid;grid-template-columns:1fr 340px;gap:18px;}
+@media(max-width:1150px){.two-col{grid-template-columns:1fr;}}
+.three-col{display:grid;grid-template-columns:1fr 1fr 300px;gap:18px;}
+@media(max-width:1250px){.three-col{grid-template-columns:1fr 1fr;}}
+@media(max-width:800px){.three-col{grid-template-columns:1fr;}}
+
+/* ══ CARD BASE ══ */
+.card{
+  background:var(--s2);border:1px solid var(--brd);border-radius:var(--r);
+  overflow:hidden;animation:fadeUp .5s ease-out both;
+}
+.card-hd{
+  padding:16px 20px 14px;
+  border-bottom:1px solid var(--brd);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card-hd-l{display:flex;align-items:center;gap:8px;font-size:.83rem;font-weight:800;}
+.card-hd-l i{font-size:.85rem;}
+.card-bd{padding:16px 20px;}
+
+/* ══ TOOLS GRID ══ */
+.tools-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+@media(max-width:900px){.tools-grid{grid-template-columns:repeat(2,1fr);}}
+.tool-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+  padding:18px 12px;border-radius:14px;
+  background:rgba(255,255,255,.03);border:1px solid var(--brd);
+  cursor:pointer;transition:all .18s;text-align:center;
+  font-family:var(--font);
+}
+.tool-btn:hover{
+  background:rgba(124,58,237,.08)!important;border-color:rgba(124,58,237,.2);
+  transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.tool-ico{
+  width:44px;height:44px;border-radius:13px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.tool-name{font-size:.76rem;font-weight:800;color:var(--tx);}
+.tool-sub{font-size:.59rem;color:var(--mu2);}
+
+/* ══ REPORTS TABLE ══ */
+.r-table{width:100%;border-collapse:collapse;}
+.r-table th{
+  padding:8px 12px;font-size:.56rem;font-weight:900;text-transform:uppercase;
+  letter-spacing:2px;color:var(--mu);border-bottom:1px solid var(--brd2);
+  text-align:left;
+}
+.r-table td{padding:11px 12px;font-size:.8rem;border-bottom:1px solid var(--brd);}
+.r-table tbody tr{cursor:pointer;transition:background .12s;}
+.r-table tbody tr:hover{background:rgba(124,58,237,.04);}
+.r-table tbody tr:last-child td{border-bottom:none;}
+
+.tag{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:.58rem;font-weight:800;white-space:nowrap;}
+.tag-re{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;}
+.tag-or{background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.2);color:#fb923c;}
+.tag-ye{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);color:#fbbf24;}
+.tag-gr{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);color:#34d399;}
+.tag-vi{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.2);color:#a78bfa;}
+.tag-ac{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:#60a5fa;}
+.tag-mu{background:rgba(255,255,255,.05);border:1px solid var(--brd);color:var(--mu2);}
+
+/* ══ SEARCH BAR ══ */
+.srch-row{padding:12px 16px;border-bottom:1px solid var(--brd);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.srch-inp{
+  flex:1;min-width:160px;padding:8px 12px 8px 34px;
+  background:rgba(0,0,0,.3);border:1px solid var(--brd2);border-radius:8px;
+  color:var(--tx);font-size:.78rem;font-family:var(--font);
+  transition:border-color .15s;
+}
+.srch-inp:focus{outline:none;border-color:#7c3aed;}
+.srch-wrap{position:relative;flex:1;}
+.srch-wrap i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mu);font-size:.72rem;pointer-events:none;}
+.srch-sel{padding:8px 10px;background:rgba(0,0,0,.3);border:1px solid var(--brd2);border-radius:8px;color:var(--mu2);font-size:.74rem;font-family:var(--font);}
+
+/* ══ ACTIVITY FEED ══ */
+.act-item{
+  display:flex;align-items:flex-start;gap:11px;
+  padding:10px 0;border-bottom:1px solid var(--brd);
+}
+.act-item:last-child{border-bottom:none;}
+.act-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;
+  background:var(--dc,#a78bfa);box-shadow:0 0 8px var(--dc,#a78bfa);
+}
+.act-id{font-size:.78rem;font-weight:800;color:var(--vi);}
+.act-who{font-size:.78rem;color:var(--tx);}
+.act-when{font-size:.62rem;color:var(--mu2);margin-top:2px;font-family:var(--mono);}
+
+/* ══ USERS LIST ══ */
+.usr-item{
+  display:flex;align-items:center;gap:11px;
+  padding:9px 0;border-bottom:1px solid var(--brd);
+}
+.usr-item:last-child{border-bottom:none;}
+.usr-av{
+  width:32px;height:32px;border-radius:9px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:900;
+  background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.25);
+  color:#c4b5fd;
+}
+.usr-name{font-size:.8rem;font-weight:700;color:var(--tx);}
+.usr-when{font-size:.6rem;color:var(--mu2);font-family:var(--mono);}
+
+/* ══ SYSTEM STATUS PANEL ══ */
+.sys-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 0;border-bottom:1px solid var(--brd);font-size:.8rem;
+}
+.sys-row:last-child{border-bottom:none;}
+.sys-k{color:var(--mu2);}
+.sys-v{font-weight:700;font-family:var(--mono);font-size:.76rem;}
+.sys-ok{color:var(--gr);}
+.sys-vi{color:var(--vi);}
+.sys-ye{color:var(--ye);}
+
+/* ══ EMERGENCY CARDS ══ */
+.em-card{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid var(--brd);
+  margin-bottom:8px;cursor:pointer;text-decoration:none;
+  transition:all .15s;
+}
+.em-card:last-child{margin-bottom:0;}
+.em-card:hover{background:rgba(124,58,237,.07)!important;border-color:rgba(124,58,237,.2);transform:translateX(4px);}
+.em-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;}
+.em-name{font-size:.8rem;font-weight:800;}
+.em-sub{font-size:.6rem;color:var(--mu2);}
+
+/* ══ MAP ══ */
+#adm-map{height:340px;border-radius:0 0 var(--r) var(--r);background:#0a0818;}
+.map-filters{padding:12px 16px;display:flex;gap:.4rem;flex-wrap:wrap;border-bottom:1px solid var(--brd);align-items:center;justify-content:space-between;}
+.mf-btn{
+  padding:5px 12px;border-radius:7px;font-size:.67rem;font-weight:800;
+  cursor:pointer;border:1px solid;transition:all .15s;
+  font-family:var(--font);
+}
+.mf-all{background:rgba(124,58,237,.12)!important;border-color:rgba(124,58,237,.3);color:#a78bfa;}
+.mf-fi{background:rgba(239,68,68,.1)!important;border-color:rgba(239,68,68,.22);color:#f87171;}
+.mf-lu{background:rgba(244,114,182,.1)!important;border-color:rgba(244,114,182,.22);color:#f472b6;}
+.mf-sa{background:rgba(52,211,153,.1)!important;border-color:rgba(52,211,153,.22);color:#34d399;}
+.mf-on{background:rgba(103,232,249,.1)!important;border-color:rgba(103,232,249,.22);color:#67e8f9;}
+.mf-btn.active{filter:brightness(1.3);}
+.map-loc-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border-radius:7px;font-size:.66rem;font-weight:700;
+  background:rgba(124,58,237,.1)!important;border:1px solid rgba(124,58,237,.2);color:#a78bfa;cursor:pointer;
+  transition:all .14s;font-family:var(--font);
+}
+.map-loc-btn:hover{background:rgba(124,58,237,.18)!important;}
+.map-hd-txt{
+  font-size:.62rem;color:var(--mu2);display:flex;align-items:center;gap:6px;
+}
+.map-hd-txt span{font-weight:800;color:var(--cy);}
+
+/* ══ PLAN DE SEGURIDAD ══ */
+.plan-item{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:12px 0;border-bottom:1px solid var(--brd);
+}
+.plan-item:last-child{border-bottom:none;}
+.plan-num{
+  width:24px;height:24px;border-radius:7px;flex-shrink:0;
+  background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.25);
+  color:#a78bfa;font-size:.65rem;font-weight:900;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+}
+.plan-txt{font-size:.8rem;color:var(--mu3);line-height:1.55;}
+
+/* ══ HOTLINE CARDS ══ */
+.hl-card{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 14px;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid var(--brd);
+  margin-bottom:7px;cursor:pointer;text-decoration:none;
+  transition:all .16s;
+}
+.hl-card:hover{border-color:var(--brd2);transform:translateX(3px);}
+.hl-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;}
+.hl-name{font-size:.79rem;font-weight:800;color:var(--tx);}
+.hl-num{font-size:.62rem;color:var(--mu2);font-family:var(--mono);}
+
+/* ══ CHART ══ */
+.mini-chart{display:flex;align-items:flex-end;gap:4px;height:50px;padding-top:4px;}
+.mini-bar{
+  flex:1;background:var(--mc,rgba(124,58,237,.3));border-radius:4px 4px 0 0;
+  transition:height .4s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
+  position:relative;
+}
+.mini-bar:hover{filter:brightness(1.4);}
+.mini-bar::before{
+  content:attr(data-v);position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+  font-size:.52rem;font-family:var(--mono);color:var(--mu2);white-space:nowrap;
+}
+.chart-labels{display:flex;gap:4px;margin-top:5px;}
+.chart-labels span{flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);}
+
+/* ══ PROGRESS BARS ══ */
+.prog-row{margin-bottom:12px;}
+.prog-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.prog-lbl{font-size:.74rem;font-weight:700;}
+.prog-val{font-size:.7rem;font-family:var(--mono);color:var(--mu2);}
+.prog-track{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:3px;background:var(--pf,var(--pu));animation:barIn .8s cubic-bezier(.4,0,.2,1) both;}
+
+/* ══ SUGGESTION ITEM ══ */
+.sug-item{
+  padding:12px 0;border-bottom:1px solid var(--brd);
+  display:flex;align-items:flex-start;gap:10px;
+}
+.sug-item:last-child{border-bottom:none;}
+.sug-ico{
+  width:30px;height:30px;border-radius:8px;flex-shrink:0;
+  background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.2);
+  display:flex;align-items:center;justify-content:center;font-size:.78rem;color:#a78bfa;
+}
+.sug-q{font-size:.78rem;font-weight:700;margin-bottom:2px;}
+.sug-m{font-size:.66rem;color:var(--mu2);}
+.sug-btns{display:flex;gap:.3rem;margin-top:6px;}
+.sug-b{padding:3px 9px;border-radius:5px;font-size:.61rem;font-weight:800;cursor:pointer;border:1px solid;transition:all .12s;font-family:var(--font);}
+.sug-ok{background:rgba(52,211,153,.09)!important;border-color:rgba(52,211,153,.2);color:#34d399;}
+.sug-de{background:rgba(239,68,68,.09)!important;border-color:rgba(239,68,68,.2);color:#f87171;}
+
+/* ══ PAGINATION ══ */
+.pg{display:flex;align-items:center;justify-content:flex-end;gap:.3rem;padding:11px 16px;border-top:1px solid var(--brd);}
+.pg-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--brd);background:transparent;color:var(--mu2);font-size:.73rem;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;font-family:var(--font);}
+.pg-btn:hover,.pg-btn.on{background:rgba(124,58,237,.12)!important;border-color:rgba(124,58,237,.25);color:#a78bfa;}
+
+/* ══ VIEW BUTTON ══ */
+.vbtn{
+  width:26px;height:26px;border-radius:7px;
+  background:rgba(255,255,255,.04);border:1px solid var(--brd);
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:.72rem;color:var(--mu2);transition:all .12s;
+}
+.vbtn:hover{background:rgba(124,58,237,.12)!important;color:#a78bfa;border-color:rgba(124,58,237,.22);}
+
+/* ══ LINK BTN ══ */
+.link-btn{
+  font-size:.67rem;font-weight:800;color:var(--vi);
+  display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+  transition:color .12s;text-decoration:none;
+  background:transparent;border:none;font-family:var(--font);
+}
+.link-btn:hover{color:var(--cy);}
+
+/* ══ NOTIFICATION DOT ══ */
+.ndot{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:5px;
+  font-size:.54rem;font-weight:900;font-family:var(--mono);
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.25);color:#f87171;
+}
+
+/* ══ ONLINE BADGE ══ */
+.online-card{
+  text-align:center;padding:22px 16px;
+  background:radial-gradient(ellipse at center,rgba(52,211,153,.06) 0%,transparent 70%);
+}
+.online-val{font-size:2.5rem;font-weight:900;font-family:var(--mono);color:var(--gr);line-height:1;animation:countUp .8s cubic-bezier(.34,1.56,.64,1);}
+.online-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:2px;color:var(--mu2);margin-top:5px;}
+
+/* ══ RESPONSIVE ══ */
+@media(max-width:768px){
+  .ah{padding:20px 18px 18px;}
+  .ah-title{font-size:1.5rem;}
+  .adc{padding:14px 14px 28px;}
+  .stats6{grid-template-columns:repeat(2,1fr);}
+  .qa-grid{grid-template-columns:repeat(2,1fr);}
+  .tools-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+
+<!-- ████████  HERO  ████████ -->
+<div class="ah">
+  <div class="ah-orb ah-orb1"></div>
+  <div class="ah-orb ah-orb2"></div>
+  <div class="ah-orb ah-orb3"></div>
+  <div class="ah-inner">
+    <div class="ah-l">
+      <div class="ah-badge"><span class="ah-badge-dot"></span>Acceso administrativo</div>
+      <h1 class="ah-title">Panel de Control</h1>
+      <div class="ah-meta">
+        <span style="font-family:var(--mono);font-size:.68rem;color:var(--cy);">_</span>
+        <span style="font-family:var(--mono);font-size:.7rem;">{{ request.user.username }}</span>
+        <span class="atag atag-ok">● Sistema activo</span>
+        <span class="atag atag-vi">Sentinel v9.0</span>
+        <span class="atag atag-re">{% if reportes_criticos %}{{ reportes_criticos }} CRÍTICO{{ reportes_criticos|pluralize:"S" }}{% else %}Sin críticos{% endif %}</span>
+        <span style="font-family:var(--mono);font-size:.68rem;color:var(--mu2);" id="hero-clk"></span>
+      </div>
+    </div>
+    <div class="ah-r">
+      <a href="tel:911" class="abtn ab-re"><i class="fa-solid fa-phone-volume"></i>911</a>
+      <a href="{% url 'projects:reporte-create' %}" class="abtn ab-gr"><i class="fa-solid fa-plus"></i>Reporte</a>
+      <a href="{% url 'projects:sugerencias-admin' %}" class="abtn ab-ye"><i class="fa-solid fa-inbox"></i>Sugerencias{% if pendientes_global %} ({{ pendientes_global }}){% endif %}</a>
+      <a href="/admin/" target="_blank" class="abtn ab-vi"><i class="fa-solid fa-terminal"></i>Sistema</a>
+    </div>
+  </div>
+</div>
+
+<!-- ████████  CONTENIDO  ████████ -->
+<div class="adc">
+
+  <!-- ── STATS ── -->
+  <div>
+    <div class="sec-hd">
+      <span class="sec-t"><i class="fa-solid fa-chart-bar"></i>Métricas en Tiempo Real</span>
+      <span class="link-btn" id="stats-refresh" onclick="animateStats()"><i class="fa-solid fa-arrows-rotate"></i>Actualizar</span>
+    </div>
+    <div class="stats6">
+      <!-- Críticos -->
+      <div class="stat-c" style="--sc:#f87171;--sib:rgba(248,113,113,.12);--svc:#f87171;" onclick="filterTable('critico')">
+        <div class="stat-ring" style="--rc:#f87171;"></div>
+        <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation" style="color:#f87171;"></i></div>
+        <div class="stat-val" id="sv-crit">{{ reportes_criticos|default:0 }}</div>
+        <div class="stat-lbl">Críticos</div>
+      </div>
+      <!-- Sin revisar -->
+      <div class="stat-c" style="--sc:#fbbf24;--sib:rgba(251,191,36,.1);--svc:#fbbf24;" onclick="filterTable('nuevo')">
+        <div class="stat-icon"><i class="fa-solid fa-clipboard-list" style="color:#fbbf24;"></i></div>
+        <div class="stat-val" id="sv-pen">{{ reportes_sin_revisar|default:0 }}</div>
+        <div class="stat-lbl">Sin Revisar</div>
+      </div>
+      <!-- Total reportes -->
+      <div class="stat-c" style="--sc:#fb923c;--sib:rgba(251,146,60,.1);--svc:#fb923c;">
+        <div class="stat-icon"><i class="fa-solid fa-folder" style="color:#fb923c;"></i></div>
+        <div class="stat-val" id="sv-tot">{{ total_reportes|default:0 }}</div>
+        <div class="stat-lbl">Total</div>
+      </div>
+      <!-- Usuarias -->
+      <div class="stat-c" style="--sc:#67e8f9;--sib:rgba(103,232,249,.1);--svc:#67e8f9;">
+        <div class="stat-icon"><i class="fa-solid fa-users" style="color:#67e8f9;"></i></div>
+        <div class="stat-val" id="sv-usr">{{ total_usuarios|default:0 }}</div>
+        <div class="stat-lbl">Usuarias</div>
+      </div>
+      <!-- Sugerencias -->
+      <div class="stat-c" style="--sc:#a78bfa;--sib:rgba(167,139,250,.1);--svc:#a78bfa;">
+        <div class="stat-icon"><i class="fa-solid fa-lightbulb" style="color:#a78bfa;"></i></div>
+        <div class="stat-val" id="sv-sug">{{ sugerencias_pendientes|default:0 }}</div>
+        <div class="stat-lbl">Sugerencias</div>
+      </div>
+      <!-- Sentinel AI -->
+      <div class="stat-c" style="--sc:#34d399;--sib:rgba(52,211,153,.1);" onclick="openAI('chat')">
+        <div class="stat-icon"><i class="fa-solid fa-robot" style="color:#34d399;"></i></div>
+        <div class="online-card" style="padding:0;background:none;">
+          <div class="online-val">ON</div>
+          <div class="online-lbl">Sentinel AI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ACCIONES RÁPIDAS ── -->
+  <div>
+    <div class="sec-hd">
+      <span class="sec-t"><i class="fa-solid fa-bolt"></i>Acciones Rápidas</span>
+    </div>
+    <div class="qa-grid">
+      <a href="{% url 'projects:reporte-list' %}" class="qa-card" style="--glow:rgba(251,146,60,.3);">
+        <div class="qa-ico" style="background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.2);">
+          <i class="fa-solid fa-folder-open" style="color:#fb923c;"></i>
+        </div>
+        <div>
+          <div class="qa-name">Reportes</div>
+          <div class="qa-sub">Gestionar</div>
+        </div>
+      </a>
+      <a href="{% url 'projects:tip-create' %}" class="qa-card" style="--glow:rgba(251,191,36,.3);">
+        <div class="qa-ico" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2);">
+          <i class="fa-solid fa-lightbulb" style="color:#fbbf24;"></i>
+        </div>
+        <div>
+          <div class="qa-name">Nuevo Tip</div>
+          <div class="qa-sub">Publicar</div>
+        </div>
+      </a>
+      <a href="{% url 'projects:institucion-create' %}" class="qa-card" style="--glow:rgba(52,211,153,.3);">
+        <div class="qa-ico" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2);">
+          <i class="fa-solid fa-building-ngo" style="color:#34d399;"></i>
+        </div>
+        <div>
+          <div class="qa-name">Institución</div>
+          <div class="qa-sub">Agregar</div>
+        </div>
+      </a>
+      <a href="{% url 'projects:tipo-create' %}" class="qa-card" style="--glow:rgba(103,232,249,.3);">
+        <div class="qa-ico" style="background:rgba(103,232,249,.12);border:1px solid rgba(103,232,249,.2);">
+          <i class="fa-solid fa-book-open" style="color:#67e8f9;"></i>
+        </div>
+        <div>
+          <div class="qa-name">Definición</div>
+          <div class="qa-sub">Glosario</div>
+        </div>
+      </a>
+      <a href="{% url 'projects:sugerencias-admin' %}" class="qa-card" style="--glow:rgba(244,114,182,.3);">
+        <div class="qa-ico" style="background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.2);">
+          <i class="fa-solid fa-inbox" style="color:#f472b6;"></i>
+        </div>
+        <div>
+          <div class="qa-name">Sugerencias</div>
+          <div class="qa-sub">Revisar</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ── HERRAMIENTAS OPERATIVAS ── -->
+  <div>
+    <div class="sec-hd">
+      <span class="sec-t"><i class="fa-solid fa-shield-halved"></i>Herramientas Operativas</span>
+    </div>
+    <div class="tools-grid">
+      <button class="tool-btn" onclick="openAI('orientacion')">
+        <div class="tool-ico" style="background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.2);"><i class="fa-solid fa-robot" style="color:#fb923c;"></i></div>
+        <div class="tool-name">Sentinel AI</div>
+        <div class="tool-sub">Análisis</div>
+      </button>
+      <button class="tool-btn" onclick="startFakeCall()">
+        <div class="tool-ico" style="background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.2);"><i class="fa-solid fa-phone-flip" style="color:#f472b6;"></i></div>
+        <div class="tool-name">Llamada Falsa</div>
+        <div class="tool-sub">Evasión</div>
+      </button>
+      <button class="tool-btn" onclick="shareLocation()">
+        <div class="tool-ico" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2);"><i class="fa-solid fa-location-dot" style="color:#34d399;"></i></div>
+        <div class="tool-name">SOS Ubicación</div>
+        <div class="tool-sub">Compartir</div>
+      </button>
+      <button class="tool-btn" onclick="showRiskModal()">
+        <div class="tool-ico" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);"><i class="fa-solid fa-gauge-high" style="color:#f87171;"></i></div>
+        <div class="tool-name">Test Riesgo</div>
+        <div class="tool-sub">Evaluar</div>
+      </button>
+      <button class="tool-btn" onclick="toggleWiki()">
+        <div class="tool-ico" style="background:rgba(103,232,249,.12);border:1px solid rgba(103,232,249,.2);"><i class="fa-solid fa-eye-slash" style="color:#67e8f9;"></i></div>
+        <div class="tool-name">Camuflaje</div>
+        <div class="tool-sub">Wikipedia</div>
+      </button>
+      <button class="tool-btn" onclick="openAI('legal')">
+        <div class="tool-ico" style="background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.2);"><i class="fa-solid fa-scale-balanced" style="color:#a78bfa;"></i></div>
+        <div class="tool-name">Legal MX</div>
+        <div class="tool-sub">Legislación</div>
+      </button>
+      <button class="tool-btn" onclick="openAI('plan')">
+        <div class="tool-ico" style="background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.2);"><i class="fa-solid fa-shield" style="color:#7c3aed;"></i></div>
+        <div class="tool-name">Plan</div>
+        <div class="tool-sub">Seguridad</div>
+      </button>
+      <a href="tel:911" class="tool-btn">
+        <div class="tool-ico" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);animation:glow-red 2s infinite;"><i class="fa-solid fa-phone-volume" style="color:#f87171;"></i></div>
+        <div class="tool-name">SOS 911</div>
+        <div class="tool-sub">Emergencia</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ── REPORTES + ACTIVIDAD ── -->
+  <div class="two-col" style="animation:fadeUp .5s ease-out .2s both;">
+    <!-- Reportes recientes -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-folder" style="color:#fb923c;"></i>Reportes Recientes</span>
+        <a href="{% url 'projects:reporte-list' %}" class="link-btn">Ver todos <i class="fa-solid fa-arrow-right"></i></a>
+      </div>
+      <div class="srch-row">
+        <div class="srch-wrap">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input class="srch-inp" type="text" id="tbl-srch" placeholder="Buscar usuaria o descripción…" oninput="filterTbl()">
+        </div>
+        <select class="srch-sel" id="tbl-urg" onchange="filterTbl()">
+          <option value="">Urgencia</option>
+          <option value="critico">Crítico</option>
+          <option value="alto">Alto</option>
+          <option value="medio">Medio</option>
+          <option value="bajo">Bajo</option>
+        </select>
+        <select class="srch-sel" id="tbl-sta" onchange="filterTbl()">
+          <option value="">Estado</option>
+          <option value="nuevo">Nuevo</option>
+          <option value="revision">Revisión</option>
+          <option value="proceso">En proceso</option>
+          <option value="cerrado">Cerrado</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="r-table" id="rep-tbl">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Usuaria</th>
+              <th>Descripción</th>
+              <th>Urgencia</th>
+              <th>Estado</th>
+              <th>Fecha</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbl-body">
+          {% for r in reportes %}
+          <tr data-urg="{{ r.nivel_urgencia }}" data-sta="{{ r.status }}">
+            <td><span style="color:var(--vi);font-family:var(--mono);font-size:.74rem;font-weight:800;">#{{ r.id|stringformat:"04d" }}</span></td>
+            <td style="font-weight:700;">{{ r.nombre_reportante|truncatechars:18 }}</td>
+            <td style="color:var(--mu3);">{{ r.descripcion|truncatechars:30 }}</td>
+            <td>
+              {% if r.nivel_urgencia == 'critico' %}<span class="tag tag-re">● Crítico</span>
+              {% elif r.nivel_urgencia == 'alto' %}<span class="tag tag-or">● Alto</span>
+              {% elif r.nivel_urgencia == 'medio' %}<span class="tag tag-ye">● Medio</span>
+              {% else %}<span class="tag tag-gr">● Bajo</span>{% endif %}
+            </td>
+            <td>
+              {% if r.status == 'nuevo' %}<span class="tag tag-ac">Nuevo</span>
+              {% elif r.status == 'revision' %}<span class="tag tag-ye">Revisión</span>
+              {% elif r.status == 'proceso' %}<span class="tag tag-or">En proceso</span>
+              {% else %}<span class="tag tag-mu">Cerrado</span>{% endif %}
+            </td>
+            <td style="font-size:.68rem;color:var(--mu2);font-family:var(--mono);white-space:nowrap;">{{ r.fecha_reporte|date:"d/m H:i" }}</td>
+            <td><a href="{% url 'projects:reporte-detail' r.pk %}" class="vbtn"><i class="fa-solid fa-eye"></i></a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" style="text-align:center;color:var(--mu);padding:28px;font-size:.82rem;">Sin reportes registrados</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="pg">
+        <button class="pg-btn"><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="pg-btn on">1</button>
+        <button class="pg-btn">2</button>
+        <button class="pg-btn">3</button>
+        <button class="pg-btn"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <!-- Actividad reciente -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-clock-rotate-left" style="color:var(--vi);"></i>Actividad Reciente</span>
+      </div>
+      <div class="card-bd">
+        {% for r in reportes %}
+        <div class="act-item">
+          <div class="act-dot" style="--dc:{% if r.nivel_urgencia == 'critico' %}#f87171{% elif r.nivel_urgencia == 'alto' %}#fb923c{% else %}#a78bfa{% endif %};"></div>
+          <div>
+            <div><span class="act-id">#{{ r.id|stringformat:"04d" }}</span> · <span class="act-who">{{ r.nombre_reportante|truncatechars:14 }}</span></div>
+            <div class="act-when">{{ r.fecha_reporte|timesince }} atrás</div>
+          </div>
+        </div>
+        {% empty %}
+        <p style="font-size:.78rem;color:var(--mu);text-align:center;padding:20px 0;">Sin actividad</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAPA + ESTADO + EMERGENCIAS ── -->
+  <div class="three-col" style="animation:fadeUp .5s ease-out .35s both;">
+    <!-- MAPA -->
+    <div class="card" style="grid-column:span 2;">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-map-location-dot" style="color:var(--cy);"></i>
+          Mapa de Instituciones · CDMX
+          <span style="font-size:.6rem;color:var(--cy);font-family:var(--mono);margin-left:4px;">— <span id="map-count">26</span> puntos</span>
+        </span>
+        <a href="https://maps.google.com" target="_blank" class="link-btn"><i class="fa-solid fa-up-right-from-square"></i>Google Maps</a>
+      </div>
+      <div class="map-filters">
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+          <button class="mf-btn mf-all active" onclick="filterMap('all',this)">Todas</button>
+          <button class="mf-btn mf-fi" onclick="filterMap('justice',this)">Fiscalía</button>
+          <button class="mf-btn mf-lu" onclick="filterMap('luna',this)">LUNA</button>
+          <button class="mf-btn mf-sa" onclick="filterMap('health',this)">Salud</button>
+          <button class="mf-btn mf-on" onclick="filterMap('ong',this)">ONG</button>
+        </div>
+        <button class="map-loc-btn" onclick="goMyLoc()"><i class="fa-solid fa-crosshairs"></i>Mi ubicación</button>
+      </div>
+      <div id="adm-map"></div>
+    </div>
+
+    <!-- Estado + emergencias -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-hd-l"><i class="fa-solid fa-server" style="color:var(--gr);"></i>Estado del Sistema</span>
+        </div>
+        <div class="card-bd">
+          <div class="sys-row"><span class="sys-k">Sentinel AI</span><span class="sys-v sys-ok">● Operativo</span></div>
+          <div class="sys-row"><span class="sys-k">Motor IA</span><span class="sys-v sys-vi">Anthropic Claude</span></div>
+          <div class="sys-row"><span class="sys-k">Base de datos</span><span class="sys-v sys-ok">MySQL · Online</span></div>
+          <div class="sys-row"><span class="sys-k">Versión</span><span class="sys-v sys-vi">Sentinel v9.0</span></div>
+          <div class="sys-row"><span class="sys-k">Cifrado</span><span class="sys-v sys-ok">🔒 AES-256</span></div>
+          <div class="sys-row"><span class="sys-k">Sesión</span><span class="sys-v sys-ye" id="ses-clk">--:--:--</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-hd-l"><i class="fa-solid fa-phone-volume" style="color:var(--re);"></i>Emergencias</span>
+        </div>
+        <div class="card-bd">
+          <a href="tel:911" class="em-card">
+            <div class="em-ico" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);"><i class="fa-solid fa-phone" style="color:#f87171;"></i></div>
+            <div><div class="em-name">911 — Emergencias</div><div class="em-sub">24/7 · Gratuito</div></div>
+          </a>
+          <a href="tel:5556581111" class="em-card">
+            <div class="em-ico" style="background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.2);"><i class="fa-solid fa-venus" style="color:#f472b6;"></i></div>
+            <div><div class="em-name">Línea Mujeres CDMX</div><div class="em-sub">55 5658-1111 · 24h</div></div>
+          </a>
+          <a href="tel:5555757583" class="em-card">
+            <div class="em-ico" style="background:rgba(103,232,249,.12);border:1px solid rgba(103,232,249,.2);"><i class="fa-solid fa-scale-balanced" style="color:#67e8f9;"></i></div>
+            <div><div class="em-name">CEJUR</div><div class="em-sub">55 5575-7583</div></div>
+          </a>
+          <a href="tel:8009008000" class="em-card">
+            <div class="em-ico" style="background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.2);"><i class="fa-solid fa-shield-halved" style="color:#a78bfa;"></i></div>
+            <div><div class="em-name">CONAVIM</div><div class="em-sub">800 900-8000</div></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── USUARIAS + SUGERENCIAS + DISTRIBUCIÓN ── -->
+  <div class="three-col" style="animation:fadeUp .5s ease-out .45s both;">
+    <!-- Usuarias -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-users" style="color:var(--cy);"></i>Usuarias Registradas</span>
+        <span class="tag tag-ac">{{ total_usuarios|default:0 }} TOTAL</span>
+      </div>
+      <div class="card-bd">
+        {% for u in usuarios_recientes %}
+        <div class="usr-item">
+          <div class="usr-av">{{ u.username|first|upper }}</div>
+          <div>
+            <div class="usr-name">{{ u.username }}</div>
+            <div class="usr-when">{{ u.date_joined|timesince }} en el sistema</div>
+          </div>
+        </div>
+        {% empty %}
+        <p style="font-size:.78rem;color:var(--mu);text-align:center;padding:18px 0;">Sin usuarias</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Sugerencias pendientes -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-inbox" style="color:var(--ye);"></i>Sugerencias Pendientes</span>
+        {% if pendientes_global %}<span class="ndot">{{ pendientes_global }}</span>{% endif %}
+      </div>
+      <div class="card-bd">
+        {% for s in sugerencias_recientes %}
+        <div class="sug-item">
+          <div class="sug-ico"><i class="fa-solid fa-comment-dots"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div class="sug-q">{{ s.contenido|truncatechars:50 }}</div>
+            <div class="sug-m">{{ s.autor.username }} · {{ s.creado_en|timesince }} atrás</div>
+            <div class="sug-btns">
+              <a href="{% url 'projects:sugerencia-revisar' s.pk %}" class="sug-b sug-ok"><i class="fa-solid fa-check"></i> Revisar</a>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <p style="font-size:.78rem;color:var(--mu);text-align:center;padding:18px 0;">Sin pendientes 🎉</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Distribución por urgencia -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-chart-pie" style="color:var(--pk);"></i>Distribución</span>
+      </div>
+      <div class="card-bd">
+        <div class="prog-row">
+          <div class="prog-top"><span class="prog-lbl" style="color:#f87171;">Crítico</span><span class="prog-val">{{ reportes_criticos|default:0 }}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="--pf:#f87171;--w:{% widthratio reportes_criticos|default:0 total_reportes|default:1 100 %}%;width:var(--w);animation-delay:.1s;"></div></div>
+        </div>
+        <div class="prog-row">
+          <div class="prog-top"><span class="prog-lbl" style="color:#fb923c;">Alto</span><span class="prog-val">{{ reportes_alto|default:0 }}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="--pf:#fb923c;--w:{% widthratio reportes_alto|default:0 total_reportes|default:1 100 %}%;width:var(--w);animation-delay:.2s;"></div></div>
+        </div>
+        <div class="prog-row">
+          <div class="prog-top"><span class="prog-lbl" style="color:#fbbf24;">Medio</span><span class="prog-val">{{ reportes_medio|default:0 }}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="--pf:#fbbf24;--w:{% widthratio reportes_medio|default:0 total_reportes|default:1 100 %}%;width:var(--w);animation-delay:.3s;"></div></div>
+        </div>
+        <div class="prog-row">
+          <div class="prog-top"><span class="prog-lbl" style="color:#34d399;">Bajo</span><span class="prog-val">{{ reportes_bajo|default:0 }}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="--pf:#34d399;--w:{% widthratio reportes_bajo|default:0 total_reportes|default:1 100 %}%;width:var(--w);animation-delay:.4s;"></div></div>
+        </div>
+        <!-- Mini chart semanal -->
+        <div style="margin-top:16px;">
+          <div class="sec-t" style="margin-bottom:8px;"><i class="fa-solid fa-chart-line"></i>Semana actual</div>
+          <div class="mini-chart">
+            <div class="mini-bar" style="--mc:rgba(248,113,113,.4);height:30%;" data-v="2"></div>
+            <div class="mini-bar" style="--mc:rgba(251,146,60,.4);height:55%;" data-v="4"></div>
+            <div class="mini-bar" style="--mc:rgba(251,191,36,.4);height:40%;" data-v="3"></div>
+            <div class="mini-bar" style="--mc:rgba(52,211,153,.4);height:70%;" data-v="5"></div>
+            <div class="mini-bar" style="--mc:rgba(103,232,249,.4);height:45%;" data-v="3"></div>
+            <div class="mini-bar" style="--mc:rgba(167,139,250,.5);height:80%;" data-v="6"></div>
+            <div class="mini-bar" style="--mc:rgba(124,58,237,.5);height:60%;" data-v="{{ total_reportes|default:0 }}"></div>
+          </div>
+          <div class="chart-labels">
+            <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PLAN DE SEGURIDAD + LINEAS ── -->
+  <div class="two-col" style="animation:fadeUp .5s ease-out .5s both;">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-map-location-dot" style="color:var(--pk);"></i>26 Instituciones Cercanas · CDMX</span>
+        <span class="link-btn" onclick="document.getElementById('adm-map').scrollIntoView({behavior:'smooth'})"><i class="fa-solid fa-location-dot"></i>Ver mapa</span>
+      </div>
+      <div class="card-bd">
+        <div class="plan-item"><div class="plan-num">1</div><div class="plan-txt">Guarda los números de emergencia en tus contactos fijos y actívalos en favoritos.</div></div>
+        <div class="plan-item"><div class="plan-num">2</div><div class="plan-txt">Documenta cada incidente con fecha, lugar exacto y datos de posibles testigos.</div></div>
+        <div class="plan-item"><div class="plan-num">3</div><div class="plan-txt">Comparte tu ubicación en tiempo real con una persona de confianza antes de situaciones de riesgo.</div></div>
+        <div class="plan-item"><div class="plan-num">4</div><div class="plan-txt">Conoce la ruta de salida más segura de tus lugares habituales: trabajo, transporte, domicilio.</div></div>
+        <div class="plan-item"><div class="plan-num">5</div><div class="plan-txt">Usa Sentinel AI para orientación inmediata en crisis — disponible 24/7 de forma confidencial.</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-phone-volume" style="color:var(--re);"></i>Líneas de Emergencia</span>
+      </div>
+      <div class="card-bd">
+        <a href="tel:911" class="hl-card"><div class="hl-ico" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);"><i class="fa-solid fa-phone" style="color:#f87171;"></i></div><div><div class="hl-name">911 — Emergencias</div><div class="hl-num">24h · Nacional gratuito</div></div></a>
+        <a href="tel:5556581111" class="hl-card"><div class="hl-ico" style="background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.2);"><i class="fa-solid fa-venus" style="color:#f472b6;"></i></div><div><div class="hl-name">Línea Mujeres CDMX</div><div class="hl-num">55 5658-1111 · 24h</div></div></a>
+        <a href="tel:8008224460" class="hl-card"><div class="hl-ico" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2);"><i class="fa-solid fa-house-chimney-heart" style="color:#34d399;"></i></div><div><div class="hl-name">Red Nac. de Refugios</div><div class="hl-num">800-822-4460 · 24h</div></div></a>
+        <a href="tel:5553468000" class="hl-card"><div class="hl-ico" style="background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.2);"><i class="fa-solid fa-shield" style="color:#7c3aed;"></i></div><div><div class="hl-name">CAVI</div><div class="hl-num">55 5346-8000 · 24h</div></div></a>
+        <a href="tel:5555757583" class="hl-card"><div class="hl-ico" style="background:rgba(103,232,249,.12);border:1px solid rgba(103,232,249,.2);"><i class="fa-solid fa-scale-balanced" style="color:#67e8f9;"></i></div><div><div class="hl-name">CEJUR</div><div class="hl-num">55 5575-7583 · Legal</div></div></a>
+        <a href="tel:8009008000" class="hl-card"><div class="hl-ico" style="background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.2);"><i class="fa-solid fa-building-shield" style="color:#a78bfa;"></i></div><div><div class="hl-name">CONAVIM</div><div class="hl-num">800 900-8000 · Sin costo</div></div></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── INSIGHTS IA + ACTIVIDAD ── -->
+  <div class="two-col" style="animation:fadeUp .5s ease-out .55s both;">
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-brain" style="color:#a78bfa;"></i>Análisis IA del Sistema</span>
+        <button class="link-btn" onclick="openAI('orientacion')"><i class="fa-solid fa-robot"></i>Abrir AI</button>
+      </div>
+      <div class="card-bd">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div style="background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.12);border-radius:11px;padding:13px;">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:#f87171;font-weight:900;margin-bottom:6px;font-family:var(--mono);">Urgencia promedio</div>
+            <div style="font-size:1.5rem;font-weight:900;color:#f87171;font-family:var(--mono);">MEDIA</div>
+            <div style="font-size:.64rem;color:var(--mu2);margin-top:3px;">Últimos 30 días</div>
+          </div>
+          <div style="background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.12);border-radius:11px;padding:13px;">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:#34d399;font-weight:900;margin-bottom:6px;font-family:var(--mono);">Respuesta equipo</div>
+            <div style="font-size:1.5rem;font-weight:900;color:#34d399;font-family:var(--mono);">&lt; 24h</div>
+            <div style="font-size:.64rem;color:var(--mu2);margin-top:3px;">Tiempo promedio</div>
+          </div>
+        </div>
+        <!-- Trend bars -->
+        <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:var(--mu);font-weight:900;margin-bottom:10px;">Tendencia semanal</div>
+        <div style="display:flex;align-items:flex-end;gap:5px;height:60px;">
+          {% for d in "1234567" %}
+          <div style="flex:1;background:linear-gradient(180deg,rgba(124,58,237,.5),rgba(124,58,237,.2));border-radius:4px 4px 0 0;height:{{ forloop.counter0|add:3 }}0%;transition:height .5s;" title="Día {{ forloop.counter }}"></div>
+          {% endfor %}
+        </div>
+        <div style="display:flex;gap:5px;margin-top:5px;">
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">L</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">M</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">X</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">J</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">V</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">S</span>
+          <span style="flex:1;text-align:center;font-size:.52rem;color:var(--mu);font-family:var(--mono);">D</span>
+        </div>
+        <!-- Tips -->
+        <div style="margin-top:16px;padding:12px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.12);border-radius:10px;">
+          <div style="font-size:.62rem;font-weight:800;color:#a78bfa;margin-bottom:5px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-robot"></i>Recomendación Sentinel AI</div>
+          <div style="font-size:.77rem;color:var(--mu2);line-height:1.6;">Existen {{ reportes_sin_revisar|default:0 }} reportes pendientes de revisión. Se recomienda atender prioritariamente los de nivel crítico. El sistema detecta mayor actividad los martes y miércoles.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Acciones recientes del sistema -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-hd-l"><i class="fa-solid fa-terminal" style="color:var(--cy);"></i>Log del Sistema</span>
+        <span style="font-size:.58rem;font-family:var(--mono);color:var(--gr);background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.15);padding:2px 7px;border-radius:5px;">● LIVE</span>
+      </div>
+      <div class="card-bd" style="font-family:var(--mono);">
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          {% for r in reportes %}
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:rgba(255,255,255,.02);border:1px solid var(--brd);font-size:.68rem;">
+            <span style="color:var(--gr);flex-shrink:0;">●</span>
+            <span style="color:var(--mu2);">{{ r.fecha_reporte|date:"H:i" }}</span>
+            <span style="color:var(--vi);">[RPT-{{ r.id|stringformat:"04d" }}]</span>
+            <span style="color:var(--mu3);">{{ r.nombre_reportante|truncatechars:12 }} · {{ r.nivel_urgencia }}</span>
+          </div>
+          {% empty %}
+          <div style="font-size:.78rem;color:var(--mu);text-align:center;padding:20px;">Sin actividad registrada</div>
+          {% endfor %}
+        </div>
+        <div style="margin-top:12px;padding:10px;background:rgba(103,232,249,.04);border:1px solid rgba(103,232,249,.1);border-radius:8px;font-size:.64rem;color:var(--cy);">
+          <span style="opacity:.6;">&gt; </span>Sistema operativo · Cifrado AES-256 activo · Sentinel v9.0
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── GESTIÓN DE CONTENIDO ── -->
+  <div style="animation:fadeUp .5s ease-out .6s both;">
+    <div class="sec-hd">
+      <span class="sec-t"><i class="fa-solid fa-layer-group"></i>Gestión de Contenido</span>
+      <span class="link-btn" onclick="openAI('orientacion')"><i class="fa-solid fa-wand-magic-sparkles"></i>Generar con AI</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <!-- Tips -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-hd-l"><i class="fa-solid fa-lightbulb" style="color:#fbbf24;"></i>Tips de Seguridad</span>
+          <a href="{% url 'projects:tip-create' %}" class="link-btn"><i class="fa-solid fa-plus"></i>Nuevo</a>
+        </div>
+        <div class="card-bd">
+          {% for t in tips_recientes %}
+          <div style="padding:8px 0;border-bottom:1px solid var(--brd);font-size:.78rem;">
+            <div style="font-weight:700;color:var(--tx);margin-bottom:2px;">{{ t.titulo|truncatechars:38 }}</div>
+            <div style="color:var(--mu2);font-size:.64rem;">{{ t.creado_en|timesince }} atrás · <a href="{% url 'projects:tip-update' t.pk %}" style="color:#fbbf24;">Editar</a></div>
+          </div>
+          {% empty %}
+          <div style="font-size:.78rem;color:var(--mu);text-align:center;padding:16px 0;">Sin tips publicados</div>
+          {% endfor %}
+        </div>
+      </div>
+      <!-- Instituciones -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-hd-l"><i class="fa-solid fa-building-ngo" style="color:#34d399;"></i>Instituciones</span>
+          <a href="{% url 'projects:institucion-create' %}" class="link-btn"><i class="fa-solid fa-plus"></i>Nueva</a>
+        </div>
+        <div class="card-bd">
+          {% for i in instituciones_recientes %}
+          <div style="padding:8px 0;border-bottom:1px solid var(--brd);font-size:.78rem;">
+            <div style="font-weight:700;color:var(--tx);margin-bottom:2px;">{{ i.nombre|truncatechars:38 }}</div>
+            <div style="color:var(--mu2);font-size:.64rem;">{{ i.tipo }} · <a href="{% url 'projects:institucion-update' i.pk %}" style="color:#34d399;">Editar</a></div>
+          </div>
+          {% empty %}
+          <div style="font-size:.78rem;color:var(--mu);text-align:center;padding:16px 0;">Sin instituciones</div>
+          {% endfor %}
+        </div>
+      </div>
+      <!-- Glosario -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-hd-l"><i class="fa-solid fa-book-open" style="color:#67e8f9;"></i>Glosario Legal</span>
+          <a href="{% url 'projects:tipo-create' %}" class="link-btn"><i class="fa-solid fa-plus"></i>Nuevo</a>
+        </div>
+        <div class="card-bd">
+          {% for g in tipos_recientes %}
+          <div style="padding:8px 0;border-bottom:1px solid var(--brd);font-size:.78rem;">
+            <div style="font-weight:700;color:var(--tx);margin-bottom:2px;">{{ g.nombre|truncatechars:38 }}</div>
+            <div style="color:var(--mu2);font-size:.64rem;"><a href="{% url 'projects:tipo-update' g.pk %}" style="color:#67e8f9;">Editar definición</a></div>
+          </div>
+          {% empty %}
+          <div style="font-size:.78rem;color:var(--mu);text-align:center;padding:16px 0;">Sin definiciones</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /adc -->
+
+<!-- ══════════ SCRIPTS ══════════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ── Hero clock ── */
+(function tc(){const e=document.getElementById('hero-clk'),s=document.getElementById('ses-clk');const t=new Date().toLocaleTimeString('es-MX',{hour12:false});if(e)e.textContent=t;if(s)s.textContent=t;setTimeout(tc,1000);})();
+
+/* ── Table filter ── */
+function filterTbl(){
+  const q=(document.getElementById('tbl-srch').value||'').toLowerCase();
+  const u=(document.getElementById('tbl-urg').value||'').toLowerCase();
+  const st=(document.getElementById('tbl-sta').value||'').toLowerCase();
+  document.querySelectorAll('#tbl-body tr').forEach(r=>{
+    const txt=r.textContent.toLowerCase();
+    const urg=r.dataset.urg||'';
+    const sta=r.dataset.sta||'';
+    const ok=(!q||txt.includes(q))&&(!u||urg===u)&&(!st||sta===st);
+    r.style.display=ok?'':'none';
+  });
+}
+function filterTable(urg){
+  document.getElementById('tbl-urg').value=urg;filterTbl();
+}
+
+/* ── Stats animate ── */
+function animateStats(){
+  document.querySelectorAll('.stat-val').forEach(el=>{
+    el.style.animation='none';void el.offsetWidth;
+    el.style.animation='countUp .7s cubic-bezier(.34,1.56,.64,1)';
+  });
+}
+
+/* ── LEAFLET MAP ── */
+const INSTS=[
+  {n:'FGJCDMX — Fiscalía Central',lat:19.4284,lng:-99.1362,t:'justice'},
+  {n:'LUNA Iztapalapa',lat:19.3573,lng:-98.9823,t:'luna'},
+  {n:'LUNA Gustavo A. Madero',lat:19.4848,lng:-99.1181,t:'luna'},
+  {n:'LUNA Tlalpan',lat:19.2972,lng:-99.1648,t:'luna'},
+  {n:'Hospital de la Mujer',lat:19.4256,lng:-99.1623,t:'health'},
+  {n:'INMUJERES CDMX',lat:19.4269,lng:-99.1718,t:'ong'},
+  {n:'CEJUR Centro',lat:19.4330,lng:-99.1390,t:'justice'},
+  {n:'Centro Atención Víctimas',lat:19.4310,lng:-99.1297,t:'health'},
+  {n:'Cruz Roja Polanco',lat:19.4322,lng:-99.1958,t:'health'},
+  {n:'LUNA Coyoacán',lat:19.3487,lng:-99.1615,t:'luna'},
+  {n:'ONG Semillas',lat:19.4271,lng:-99.1753,t:'ong'},
+  {n:'Equis Justicia Mujeres',lat:19.4218,lng:-99.1831,t:'ong'},
+  {n:'LUNA Xochimilco',lat:19.2567,lng:-99.1025,t:'luna'},
+  {n:'LUNA Álvaro Obregón',lat:19.3600,lng:-99.2066,t:'luna'},
+  {n:'CAVI Tepepan',lat:19.2801,lng:-99.1108,t:'justice'}
+];
+const COL={justice:'#f87171',luna:'#f472b6',health:'#34d399',ong:'#67e8f9'};
+let mapM=null,allMarkers=[];
+function mkIcon(c){return L.divIcon({className:'',html:`<div style="width:12px;height:12px;background:${c};border-radius:50%;border:2px solid white;box-shadow:0 0 8px ${c}66;"></div>`,iconSize:[12,12],iconAnchor:[6,6]});}
+
+window.addEventListener('load',function(){
+  mapM=L.map('adm-map',{zoomControl:true,scrollWheelZoom:true}).setView([19.38,-99.13],11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© Leaflet · OpenStreetMap · CARTO',maxZoom:19}).addTo(mapM);
+  INSTS.forEach(i=>{
+    const m=L.marker([i.lat,i.lng],{icon:mkIcon(COL[i.t]||'#a78bfa')})
+      .addTo(mapM)
+      .bindPopup(`<b style="color:${COL[i.t]}">${i.n}</b><br><a href="https://maps.google.com/?q=${i.lat},${i.lng}" target="_blank" style="color:#a78bfa;font-size:.75rem;">Ver en Google Maps →</a>`);
+    m._cat=i.t;allMarkers.push(m);
+  });
+  document.getElementById('map-count').textContent=INSTS.length;
+});
+
+function filterMap(cat,btn){
+  document.querySelectorAll('.mf-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  allMarkers.forEach(m=>{cat==='all'||m._cat===cat?mapM.addLayer(m):mapM.removeLayer(m);});
+  const cnt=cat==='all'?INSTS.length:INSTS.filter(i=>i.t===cat).length;
+  document.getElementById('map-count').textContent=cnt;
+}
+function goMyLoc(){
+  if(!navigator.geolocation)return alert('No disponible');
+  navigator.geolocation.getCurrentPosition(p=>{
+    mapM.setView([p.coords.latitude,p.coords.longitude],14);
+    L.marker([p.coords.latitude,p.coords.longitude],{icon:mkIcon('#a78bfa')}).addTo(mapM).bindPopup('📍 Tu ubicación').openPopup();
+  },()=>alert('No se pudo obtener tu ubicación'));
+}
+</script>
+{% endblock %}
