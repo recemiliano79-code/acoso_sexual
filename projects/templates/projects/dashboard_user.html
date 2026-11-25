@@ -728,7 +728,7 @@ function mkIcon2(c){return L.divIcon({className:'',html:`<div style="width:12px;
 
 window.addEventListener('load',function(){
   map2=L.map('usr-map',{zoomControl:true,scrollWheelZoom:false}).setView([19.38,-99.13],11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© Leaflet · OpenStreetMap · CARTO',maxZoom:19}).addTo(map2);
+  document.head.insertAdjacentHTML('beforeend','<style>.mapa-oscuro{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.5);}</style>'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19,className:'mapa-oscuro'}).addTo(map2);
   INSTS.forEach(i=>{
     const m=L.marker([i.lat,i.lng],{icon:mkIcon2(COL[i.t]||'#a78bfa')})
       .addTo(map2)

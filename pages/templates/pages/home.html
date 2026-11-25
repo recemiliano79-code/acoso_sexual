@@ -1584,7 +1584,7 @@ let mapObj,allMarkers=[]
 
 setTimeout(()=>{
   mapObj=L.map('map',{zoomControl:false}).setView([19.4326,-99.1332],12)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy;CARTO',maxZoom:19}).addTo(mapObj)
+  document.head.insertAdjacentHTML('beforeend','<style>.mapa-oscuro{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.5);}</style>'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19,className:'mapa-oscuro'}).addTo(mapObj)
   L.control.zoom({position:'bottomright'}).addTo(mapObj)
 
   const pts=[
