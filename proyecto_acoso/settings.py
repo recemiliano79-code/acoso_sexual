@@ -159,7 +159,7 @@ WSGI_APPLICATION = 'proyecto_acoso.wsgi.application'
 
 def _env(*names, default=''):
     for name in names:
-        value = os.getenv(name)
+        value = (os.getenv(name) or '').strip()
         if value:
             return value
     return default
