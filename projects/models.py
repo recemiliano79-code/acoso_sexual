@@ -98,6 +98,8 @@ class Reporte(models.Model):
     descripcion  = models.TextField(verbose_name="Descripción de los hechos")
     fecha_suceso = models.DateField(null=True, blank=True)
     lugar        = models.CharField(max_length=250, blank=True, verbose_name="Lugar de los hechos")
+    latitud      = models.FloatField(null=True, blank=True, verbose_name="Latitud")
+    longitud     = models.FloatField(null=True, blank=True, verbose_name="Longitud")
 
     # ── Relaciones ────────────────────────────────────────────────
     tipo_acoso  = models.ForeignKey(TipoAcoso,  on_delete=models.SET_NULL, null=True, blank=True)

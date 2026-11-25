@@ -681,7 +681,7 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
     <!-- Reportes recientes -->
     <div class="card">
       <div class="card-hd">
-        <span class="card-hd-l"><i class="fa-solid fa-folder" style="color:#fb923c;"></i>Reportes Recientes</span>
+        <span class="card-hd-l"><i class="fa-solid fa-folder" style="color:#fb923c;"></i>Reportes por prioridad</span>
         <a href="{% url 'projects:reporte-list' %}" class="link-btn">Ver todos <i class="fa-solid fa-arrow-right"></i></a>
       </div>
       <div class="srch-row">
@@ -721,7 +721,7 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
           {% for r in reportes %}
           <tr data-urg="{{ r.nivel_urgencia }}" data-sta="{{ r.status }}">
             <td><span style="color:var(--vi);font-family:var(--mono);font-size:.74rem;font-weight:800;">#{{ r.id|stringformat:"04d" }}</span></td>
-            <td style="font-weight:700;">{{ r.nombre_reportante|truncatechars:18 }}</td>
+            <td style="font-weight:700;">{{ r.nombre_reportante|default:"An&oacute;nima"|truncatechars:18 }}</td>
             <td style="color:var(--mu3);">{{ r.descripcion|truncatechars:30 }}</td>
             <td>
               {% if r.nivel_urgencia == 'critico' %}<span class="tag tag-re">● Crítico</span>
@@ -735,7 +735,7 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
               {% elif r.status == 'proceso' %}<span class="tag tag-or">En proceso</span>
               {% else %}<span class="tag tag-mu">Cerrado</span>{% endif %}
             </td>
-            <td style="font-size:.68rem;color:var(--mu2);font-family:var(--mono);white-space:nowrap;">{{ r.fecha_reporte|date:"d/m H:i" }}</td>
+            <td style="font-size:.68rem;color:var(--mu2);font-family:var(--mono);white-space:nowrap;">{{ r.creado_en|date:"d/m H:i" }}</td>
             <td><a href="{% url 'projects:reporte-detail' r.pk %}" class="vbtn"><i class="fa-solid fa-eye"></i></a></td>
           </tr>
           {% empty %}
@@ -759,12 +759,12 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
         <span class="card-hd-l"><i class="fa-solid fa-clock-rotate-left" style="color:var(--vi);"></i>Actividad Reciente</span>
       </div>
       <div class="card-bd">
-        {% for r in reportes %}
+        {% for r in actividad %}
         <div class="act-item">
           <div class="act-dot" style="--dc:{% if r.nivel_urgencia == 'critico' %}#f87171{% elif r.nivel_urgencia == 'alto' %}#fb923c{% else %}#a78bfa{% endif %};"></div>
           <div>
             <div><span class="act-id">#{{ r.id|stringformat:"04d" }}</span> · <span class="act-who">{{ r.nombre_reportante|truncatechars:14 }}</span></div>
-            <div class="act-when">{{ r.fecha_reporte|timesince }} atrás</div>
+            <div class="act-when">{{ r.creado_en|timesince }} atrás</div>
           </div>
         </div>
         {% empty %}
@@ -874,9 +874,9 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
           <div class="sug-ico"><i class="fa-solid fa-comment-dots"></i></div>
           <div style="flex:1;min-width:0;">
             <div class="sug-q">{{ s.contenido|truncatechars:50 }}</div>
-            <div class="sug-m">{{ s.autor.username }} · {{ s.creado_en|timesince }} atrás</div>
+            <div class="sug-m">{{ s.usuario.username }} · {{ s.creado_en|timesince }} atrás</div>
             <div class="sug-btns">
-              <a href="{% url 'projects:sugerencia-revisar' s.pk %}" class="sug-b sug-ok"><i class="fa-solid fa-check"></i> Revisar</a>
+              <a href="{% url 'projects:sugerencias-admin' %}" class="sug-b sug-ok"><i class="fa-solid fa-check"></i> Revisar</a>
             </div>
           </div>
         </div>
@@ -910,18 +910,14 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
         </div>
         <!-- Mini chart semanal -->
         <div style="margin-top:16px;">
-          <div class="sec-t" style="margin-bottom:8px;"><i class="fa-solid fa-chart-line"></i>Semana actual</div>
+          <div class="sec-t" style="margin-bottom:8px;"><i class="fa-solid fa-chart-line"></i>&Uacute;ltimos 7 d&iacute;as</div>
           <div class="mini-chart">
-            <div class="mini-bar" style="--mc:rgba(248,113,113,.4);height:30%;" data-v="2"></div>
-            <div class="mini-bar" style="--mc:rgba(251,146,60,.4);height:55%;" data-v="4"></div>
-            <div class="mini-bar" style="--mc:rgba(251,191,36,.4);height:40%;" data-v="3"></div>
-            <div class="mini-bar" style="--mc:rgba(52,211,153,.4);height:70%;" data-v="5"></div>
-            <div class="mini-bar" style="--mc:rgba(103,232,249,.4);height:45%;" data-v="3"></div>
-            <div class="mini-bar" style="--mc:rgba(167,139,250,.5);height:80%;" data-v="6"></div>
-            <div class="mini-bar" style="--mc:rgba(124,58,237,.5);height:60%;" data-v="{{ total_reportes|default:0 }}"></div>
+            {% for d in semana %}
+            <div class="mini-bar" style="--mc:rgba(124,58,237,.55);height:{{ d.alto }}%;" data-v="{{ d.n }}"></div>
+            {% endfor %}
           </div>
           <div class="chart-labels">
-            <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+            {% for d in semana %}<span>{{ d.dia }}</span>{% endfor %}
           </div>
         </div>
       </div>
@@ -1010,10 +1006,10 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
       </div>
       <div class="card-bd" style="font-family:var(--mono);">
         <div style="display:flex;flex-direction:column;gap:5px;">
-          {% for r in reportes %}
+          {% for r in actividad %}
           <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:rgba(255,255,255,.02);border:1px solid var(--brd);font-size:.68rem;">
             <span style="color:var(--gr);flex-shrink:0;">●</span>
-            <span style="color:var(--mu2);">{{ r.fecha_reporte|date:"H:i" }}</span>
+            <span style="color:var(--mu2);">{{ r.creado_en|date:"H:i" }}</span>
             <span style="color:var(--vi);">[RPT-{{ r.id|stringformat:"04d" }}]</span>
             <span style="color:var(--mu3);">{{ r.nombre_reportante|truncatechars:12 }} · {{ r.nivel_urgencia }}</span>
           </div>
@@ -1062,7 +1058,7 @@ button,a{font-family:var(--font);background:transparent;border:none;cursor:point
           {% for i in instituciones_recientes %}
           <div style="padding:8px 0;border-bottom:1px solid var(--brd);font-size:.78rem;">
             <div style="font-weight:700;color:var(--tx);margin-bottom:2px;">{{ i.nombre|truncatechars:38 }}</div>
-            <div style="color:var(--mu2);font-size:.64rem;">{{ i.tipo }} · <a href="{% url 'projects:institucion-update' i.pk %}" style="color:#34d399;">Editar</a></div>
+            <div style="color:var(--mu2);font-size:.64rem;"><a href="{% url 'projects:institucion-update' i.pk %}" style="color:#34d399;">Editar</a></div>
           </div>
           {% empty %}
           <div style="font-size:.78rem;color:var(--mu);text-align:center;padding:16px 0;">Sin instituciones</div>

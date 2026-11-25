@@ -54,10 +54,11 @@ class ReporteForm(BaseStyleForm):
             'correo_reportante',
             'telefono_reportante',
             'tipo_acoso',
-            'institucion',
             'descripcion',
             'fecha_suceso',
             'lugar',
+            'latitud',
+            'longitud',
             # Antes faltaban: el HTML los enviaba pero Django los ignoraba,
             # por eso todos los reportes quedaban en "medio".
             'nivel_urgencia',

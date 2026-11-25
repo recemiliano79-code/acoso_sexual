@@ -14,7 +14,6 @@ urlpatterns = [
     # ── Tu app de cuentas PRIMERO ──────────────────────────────
     # Así login/ y register/ apuntan a tu vista combinada,
     # no a la de Django por defecto.
-    path('accounts/', include('accounts.urls')),
 
     # ── URLs de Django Auth para logout y reset de contraseña ──
     # logout/ viene de aquí. El login/ de Django queda opacado

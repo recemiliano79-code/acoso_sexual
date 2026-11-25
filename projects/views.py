@@ -16,6 +16,7 @@ from django.utils.timesince import timesince
 from django.http import JsonResponse
 from django.db.models import Case, When, Value, IntegerField, Count, Max, Q
 import json
+from datetime import datetime, time, timedelta
 from .models import Tip, TipoAcoso, Institucion, Reporte, Sugerencia, MensajeAdmin, Notificacion
 from .forms import TipForm, TipoAcosoForm, InstitucionForm, ReporteForm
 from .risk import calcular_riesgo, resumen_motivos, PISO_PUNTAJE, ETIQUETA
@@ -89,6 +90,53 @@ class AdminRequiredMixin(UserPassesTestMixin):
 #  DASHBOARD — bifurca admin vs usuario
 # ══════════════════════════════════════════════════════════════════
 
+def _contexto_admin(base_ctx):
+    """Todo lo que muestra el panel del administrador, calculado con datos reales."""
+    reportes = Reporte.objects.all()
+    total = reportes.count()
+    por_nivel = {
+        n: reportes.filter(nivel_urgencia=n).count()
+        for n in ('critico', 'alto', 'medio', 'bajo')
+    }
+
+    # Ultimos 7 dias (se agrupa en Python para no depender de las zonas horarias de MySQL)
+    hoy = timezone.localdate()
+    dias = [hoy - timedelta(days=i) for i in range(6, -1, -1)]
+    conteo = {d: 0 for d in dias}
+    desde = timezone.make_aware(datetime.combine(dias[0], time.min))
+    for creado in reportes.filter(creado_en__gte=desde).values_list('creado_en', flat=True):
+        d = timezone.localtime(creado).date()
+        if d in conteo:
+            conteo[d] += 1
+    maximo = max(conteo.values()) or 1
+    iniciales = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+    semana = [
+        {'dia': iniciales[d.weekday()], 'n': conteo[d],
+         'alto': max(6, round(conteo[d] * 100 / maximo)) if conteo[d] else 4}
+        for d in dias
+    ]
+
+    return {
+        **base_ctx,
+        'total_reportes':          total,
+        'reportes_criticos':       por_nivel['critico'],
+        'reportes_alto':           por_nivel['alto'],
+        'reportes_medio':          por_nivel['medio'],
+        'reportes_bajo':           por_nivel['bajo'],
+        'reportes_sin_revisar':    reportes.filter(revisado=False).count(),
+        'total_usuarios':          User.objects.count(),
+        'sugerencias_pendientes':  Sugerencia.objects.filter(estado='pendiente').count(),
+        'reportes':                ordenar_por_riesgo(reportes.select_related('user'))[:20],
+        'actividad':               reportes.order_by('-creado_en')[:8],
+        'usuarios_recientes':      User.objects.order_by('-date_joined')[:6],
+        'sugerencias_recientes':   Sugerencia.objects.filter(estado='pendiente').select_related('usuario')[:5],
+        'tips_recientes':          Tip.objects.all()[:4],
+        'instituciones_recientes': Institucion.objects.all()[:4],
+        'tipos_recientes':         TipoAcoso.objects.all()[:4],
+        'semana':                  semana,
+    }
+
+
 class DashboardView(LoginRequiredMixin, View):
     def get(self, request):
         is_admin = _is_admin(request.user)
@@ -103,23 +151,7 @@ class DashboardView(LoginRequiredMixin, View):
         }
 
         if is_admin:
-            ctx = {
-                **base_ctx,
-                'total_reportes':    Reporte.objects.count(),
-                'reportes_urgentes': Reporte.objects.filter(nivel_urgencia='critico').count(),
-                'reportes_nuevos':   Reporte.objects.filter(revisado=False).count(),
-                'total_usuarios':    User.objects.count(),
-                'sugerencias_pend':  Sugerencia.objects.filter(estado='pendiente').count(),
-                'reportes_recientes':Reporte.objects.select_related('user').order_by('-creado_en')[:8],
-                'usuarios_recientes':User.objects.order_by('-date_joined')[:6],
-                'reportes_urgentes_list': ordenar_por_riesgo(
-                    Reporte.objects.filter(revisado=False).filter(
-                        Q(nivel_urgencia='critico') | Q(llamar_911=True)
-                    ).select_related('user')
-                )[:5],
-                'all_reportes':      ordenar_por_riesgo(Reporte.objects.select_related('user'))[:20],
-            }
-            return render(request, 'projects/dashboard_admin.html', ctx)
+            return render(request, 'projects/dashboard_admin.html', _contexto_admin(base_ctx))
         else:
             mis_reportes = Reporte.objects.filter(user=request.user).order_by('-creado_en')
             # Marcar mensajes como leídos
@@ -144,6 +176,21 @@ class ReporteCreateView(SidebarMixin, LoginRequiredMixin, CreateView):
     form_class    = ReporteForm
     template_name = 'projects/reporte_form.html'
     success_url   = reverse_lazy('projects:reporte-list')
+
+    def get_initial(self):
+        """Pre-llena los datos de contacto con lo que ya conocemos de la persona."""
+        initial = super().get_initial()
+        u = self.request.user
+        previos = Reporte.objects.filter(user=u).order_by('-creado_en')
+
+        def ultimo(campo):
+            return (previos.exclude(**{campo + '__isnull': True}).exclude(**{campo: ''})
+                    .values_list(campo, flat=True).first() or '')
+
+        initial['nombre_reportante']   = u.get_full_name() or ultimo('nombre_reportante')
+        initial['correo_reportante']   = u.email or ultimo('correo_reportante')
+        initial['telefono_reportante'] = ultimo('telefono_reportante')
+        return initial
 
     def form_valid(self, form):
         inst = form.instance
@@ -190,6 +237,11 @@ class ReporteListView(SidebarMixin, LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        base = self.object_list
+        ctx['activos']   = base.exclude(status='cerrado').count()
+        ctx['cerrados']  = base.filter(status='cerrado').count()
+        ctx['nivel_max'] = next((ETIQUETA[n] for n in ('critico', 'alto', 'medio', 'bajo')
+                                 if base.filter(nivel_urgencia=n).exists()), '')
         if _is_admin(self.request.user):
             ctx['criticos']  = Reporte.objects.filter(nivel_urgencia='critico').count()
             ctx['altos']     = Reporte.objects.filter(nivel_urgencia='alto').count()

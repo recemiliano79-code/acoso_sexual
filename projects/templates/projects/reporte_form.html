@@ -143,6 +143,8 @@
 
 <form method="post" enctype="multipart/form-data" novalidate id="rep-form">
   {% csrf_token %}
+  <input type="hidden" name="latitud" id="id_latitud" value="{{ form.latitud.value|default:'' }}">
+  <input type="hidden" name="longitud" id="id_longitud" value="{{ form.longitud.value|default:'' }}">
 
   <!-- PASO 1: URGENCIA -->
   <div class="sec-card">
@@ -212,26 +214,16 @@
     <div class="sec-title"><i class="fa-solid fa-file-lines" style="color:#67e8f9;"></i> Detalle del Incidente <span class="step-badge">PASO 1 · REQUERIDO</span></div>
 
     <div class="field-row">
-      <div class="field">
+      <div class="field field-full">
         <label for="id_tipo_acoso"><i class="fa-solid fa-tag"></i> Tipo de acoso <span class="req">*</span></label>
         <select name="tipo_acoso" id="id_tipo_acoso">
           <option value="">Seleccione una opción...</option>
-          {% for tipo in tipos_acoso %}
+          {% for tipo in form.tipo_acoso.field.queryset %}
           <option value="{{ tipo.pk }}" {% if form.tipo_acoso.value == tipo.pk|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>
           {% endfor %}
         </select>
         <div class="field-hint"><i class="fa-solid fa-circle-info"></i> Si no encuentras el tipo exacto, selecciona el más parecido. Puedes describirlo en el campo de abajo.</div>
         {% if form.tipo_acoso.errors %}<div class="field-err">{{ form.tipo_acoso.errors.0 }}</div>{% endif %}
-      </div>
-      <div class="field">
-        <label for="id_institucion"><i class="fa-solid fa-building"></i> Institución <span style="font-size:.67rem;color:var(--muted);font-weight:400;">(opcional)</span></label>
-        <select name="institucion" id="id_institucion">
-          <option value="">Seleccione una opción...</option>
-          {% for inst in instituciones %}
-          <option value="{{ inst.pk }}" {% if form.institucion.value == inst.pk|stringformat:"s" %}selected{% endif %}>{{ inst.nombre }}</option>
-          {% endfor %}
-        </select>
-        <div class="field-hint"><i class="fa-solid fa-circle-info"></i> ¿Ocurrió en o está relacionado con alguna institución registrada?</div>
       </div>
     </div>
 
@@ -251,6 +243,7 @@
       <div class="field">
         <label for="id_lugar"><i class="fa-solid fa-location-dot"></i> Lugar del suceso</label>
         <input type="text" name="lugar" id="id_lugar" value="{{ form.lugar.value|default:'' }}" placeholder="Ej: Colonia Roma, CDMX">
+        <div class="field-hint" id="geo-hint" style="display:none;"></div>
         <div class="field-hint"><i class="fa-solid fa-circle-info"></i> Dirección aproximada o zona donde ocurrió. No necesita ser exacta.</div>
       </div>
     </div>
@@ -328,5 +321,41 @@ function updateFileList(files){
   });
 }
 function handleDrop(e){e.preventDefault();document.getElementById('dropzone').classList.remove('drag');const files=e.dataTransfer.files;document.getElementById('id_evidencias').files=files;updateFileList(files);}
+</script>
+<script>
+(function () {
+  var lat = document.getElementById('id_latitud');
+  var lng = document.getElementById('id_longitud');
+  var lugar = document.getElementById('id_lugar');
+  var hint = document.getElementById('geo-hint');
+  if (!lat || !lng || !lugar || !hint) return;
+
+  function mostrar() {
+    hint.style.display = 'flex';
+    hint.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Ubicaci&oacute;n detectada: se enviar&aacute; al equipo junto con tu reporte. <a href="#" id="geo-quitar" style="color:#67e8f9;margin-left:6px;">Quitar</a>';
+    document.getElementById('geo-quitar').onclick = function (e) {
+      e.preventDefault();
+      lat.value = '';
+      lng.value = '';
+      hint.style.display = 'none';
+    };
+  }
+
+  function pedir() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function (p) {
+      lat.value = p.coords.latitude.toFixed(6);
+      lng.value = p.coords.longitude.toFixed(6);
+      if (!lugar.value.trim()) {
+        lugar.value = 'Ubicaci\u00f3n GPS: ' + lat.value + ', ' + lng.value;
+      }
+      mostrar();
+    }, function () {
+      /* Sin permiso: la persona escribe el lugar a mano */
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
+
+  if (lat.value && lng.value) { mostrar(); } else { pedir(); }
+})();
 </script>
 {% endblock %}

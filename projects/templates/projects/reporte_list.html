@@ -65,8 +65,8 @@
 </style>
 
 <div class="page-hero">
-  <h1><i class="fa-solid fa-folder-open" style="color:#a78bfa;"></i>Mis Reportes</h1>
-  <p>Historial completo de tus incidentes · Confidencial · Solo el equipo Sentinel lo verá</p>
+  <h1><i class="fa-solid fa-folder-open" style="color:#a78bfa;"></i>{% if is_admin %}Reportes recibidos{% else %}Mis Reportes{% endif %}</h1>
+  <p>{% if is_admin %}Ordenados por nivel de riesgo: los casos abiertos y cr&iacute;ticos aparecen primero{% else %}Historial completo de tus incidentes &middot; Confidencial &middot; Solo el equipo Sentinel lo ver&aacute;{% endif %}</p>
   <div class="hero-btns">
     <a href="{% url 'projects:reporte-create' %}" class="btn btn-primary"><i class="fa-solid fa-file-circle-plus"></i> Nuevo Reporte</a>
     <a href="{% url 'projects:home' %}" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
