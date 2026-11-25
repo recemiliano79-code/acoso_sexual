@@ -1146,7 +1146,7 @@ function mkIcon(c){return L.divIcon({className:'',html:`<div style="width:12px;h
 
 window.addEventListener('load',function(){
   mapM=L.map('adm-map',{zoomControl:true,scrollWheelZoom:true}).setView([19.38,-99.13],11);
-  document.head.insertAdjacentHTML('beforeend','<style>.mapa-oscuro{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.5);}</style>'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19,className:'mapa-oscuro'}).addTo(mapM);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_5fk8_1_ac6e4e0bc60405f2df4fe073',{attribution:'&copy; OpenStreetMap contributors &copy; CARTO',maxZoom:19}).addTo(mapM);
   INSTS.forEach(i=>{
     const m=L.marker([i.lat,i.lng],{icon:mkIcon(COL[i.t]||'#a78bfa')})
       .addTo(mapM)
