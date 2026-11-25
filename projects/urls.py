@@ -6,6 +6,7 @@ from .views import (
     InstitucionListView, InstitucionCreateView, InstitucionUpdateView, InstitucionDeleteView,
     TipoListView, TipoCreateView, TipoUpdateView, TipoDeleteView,
     SugerenciaCreateView, SugerenciaEnviadaView, SugerenciasAdminView, SugerenciaRevisarView,
+    NotificacionesAPIView, NotificacionesLeerAPIView,
 )
 
 app_name = 'projects'
@@ -37,9 +38,13 @@ urlpatterns = [
     path('glosario/<int:pk>/editar/',    TipoUpdateView.as_view(), name='tipo-update'),
     path('glosario/<int:pk>/eliminar/',  TipoDeleteView.as_view(), name='tipo-delete'),
 
+    # ── Notificaciones (campana) ──────────────────────────────────────────────
+    path('api/notificaciones/',        NotificacionesAPIView.as_view(),      name='api-notificaciones'),
+    path('api/notificaciones/leer/',   NotificacionesLeerAPIView.as_view(),  name='api-notificaciones-leer'),
+
     # ── Sugerencias ───────────────────────────────────────────────────────────
     path('sugerencias/nueva/',               SugerenciaCreateView.as_view(),  name='sugerencia-create'),
     path('sugerencias/enviada/',             SugerenciaEnviadaView.as_view(), name='sugerencia-enviada'),
     path('sugerencias/admin/',               SugerenciasAdminView.as_view(),  name='sugerencias-admin'),
     path('sugerencias/<int:pk>/revisar/',    SugerenciaRevisarView.as_view(), name='sugerencia-revisar'),
-]
+]

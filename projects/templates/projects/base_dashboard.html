@@ -485,6 +485,42 @@ body{
   z-index:9999;white-space:nowrap;
 }
 #pwa-banner.show{display:flex;}
+
+/* ══════════════════════════════════════════════
+   NOTIFICACIONES (campana + avisos)
+══════════════════════════════════════════════ */
+.nbell{position:relative;background:rgba(167,139,250,.08)!important;border-color:rgba(167,139,250,.2);color:#a78bfa;cursor:pointer;}
+.nbell:hover{background:rgba(167,139,250,.18)!important;}
+.nbell.has-new i{animation:nbRing 1.6s ease-in-out infinite;transform-origin:50% 0;}
+@keyframes nbRing{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(14deg)}20%{transform:rotate(-12deg)}30%{transform:rotate(9deg)}40%{transform:rotate(-6deg)}}
+.nbell-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--re);color:#fff;font-size:.62rem;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg);}
+.nbell-badge[hidden]{display:none;}
+.npanel{position:fixed;top:58px;right:14px;width:min(380px,calc(100vw - 20px));max-height:70vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--brd3);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:1200;overflow:hidden;}
+.npanel[hidden]{display:none;}
+.npanel-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--brd2);font-size:.82rem;}
+.npanel-all{background:none;border:0;color:var(--vi);font-size:.7rem;font-weight:700;cursor:pointer;font-family:var(--font);}
+.npanel-list{overflow-y:auto;}
+.npanel-empty{padding:26px 14px;text-align:center;color:var(--mu2);font-size:.8rem;}
+.nitem{display:flex;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--brd);padding:11px 14px;cursor:pointer;color:var(--tx);font-family:var(--font);}
+.nitem:hover{background:var(--s2);}
+.nitem.unread{background:rgba(124,58,237,.07);}
+.nitem-dot{flex:0 0 9px;height:9px;margin-top:5px;border-radius:50%;background:var(--mu);}
+.nitem.unread .nitem-dot{background:var(--vi);}
+.nitem[data-nivel="critico"] .nitem-dot{background:var(--re);box-shadow:0 0 8px var(--re);}
+.nitem[data-nivel="alto"] .nitem-dot{background:var(--or);}
+.nitem[data-nivel="medio"] .nitem-dot{background:var(--ye);}
+.nitem-t{font-size:.78rem;font-weight:700;line-height:1.35;}
+.nitem-m{font-size:.72rem;color:var(--mu2);margin-top:2px;}
+.nitem-h{font-size:.64rem;color:var(--mu);margin-top:3px;}
+.ntoasts{position:fixed;top:66px;right:14px;display:flex;flex-direction:column;gap:8px;z-index:1300;width:min(340px,calc(100vw - 28px));pointer-events:none;}
+.ntoast{pointer-events:auto;cursor:pointer;background:var(--s3);border:1px solid var(--brd3);border-left:4px solid var(--vi);border-radius:10px;padding:11px 13px;box-shadow:0 12px 34px rgba(0,0,0,.5);animation:ntIn .25s ease-out;}
+.ntoast[data-nivel="critico"]{border-left-color:var(--re);}
+.ntoast[data-nivel="alto"]{border-left-color:var(--or);}
+.ntoast[data-nivel="medio"]{border-left-color:var(--ye);}
+.ntoast b{display:block;font-size:.78rem;line-height:1.35;}
+.ntoast span{display:block;font-size:.7rem;color:var(--mu2);margin-top:2px;}
+.ntoast button{margin-top:7px;background:rgba(124,58,237,.18);border:1px solid var(--brd3);color:var(--vi);border-radius:7px;padding:4px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:var(--font);}
+@keyframes ntIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -767,6 +803,9 @@ body{
       <span class="tb-pulse"><span class="tp-dot"></span>Sentinel activo</span>
     </div>
     <div class="tb-right">
+      <button type="button" class="tpb nbell" id="nbell" aria-label="Notificaciones" aria-expanded="false" onclick="PSNotif.toggle(event)">
+        <i class="fa-solid fa-bell"></i><span class="nbell-badge" id="nbell-badge" hidden>0</span>
+      </button>
       {% if mensajes_no_leidos %}
       <a href="{% url 'projects:reporte-list' %}" class="tpb tpb-msg">
         <i class="fa-solid fa-comment-dots"></i> {{ mensajes_no_leidos }} nuevo{{ mensajes_no_leidos|pluralize:"s" }}
@@ -789,6 +828,16 @@ body{
   </main>
 
 </div><!-- /main -->
+
+<!-- ═══════════════════════ NOTIFICACIONES ═══════════════════════ -->
+<div class="npanel" id="npanel" hidden role="dialog" aria-label="Notificaciones">
+  <div class="npanel-hd">
+    <strong>Notificaciones</strong>
+    <button type="button" class="npanel-all" onclick="PSNotif.readAll()">Marcar todo como leído</button>
+  </div>
+  <div class="npanel-list" id="npanel-list"><div class="npanel-empty">Sin notificaciones</div></div>
+</div>
+<div class="ntoasts" id="ntoasts" aria-live="polite"></div>
 
 <!-- ═══════════════════════ AI PANEL ═══════════════════════ -->
 <div id="ai-modal" onclick="if(event.target===this)closeAI()">
@@ -1111,5 +1160,126 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 
+
+<script>
+/* ═══════════════ Notificaciones en vivo (consulta cada 12 s) ═══════════════ */
+const PSNotif = (function(){
+  const POLL_MS   = 12000;
+  const URL_API   = "{% url 'projects:api-notificaciones' %}";
+  const URL_LEER  = "{% url 'projects:api-notificaciones-leer' %}";
+  const path      = location.pathname;
+  const mDetalle  = path.match(/^\/reportes\/(\d+)\/?$/);
+  const reporteId = mDetalle ? mDetalle[1] : null;
+  // Páginas que se refrescan solas cuando cambia un reporte: dashboard, lista y detalle
+  const paginaViva = !!reporteId || /^\/(mis-reportes\/?)?$/.test(path);
+  const tituloOrig = document.title;
+  let ultimoId = parseInt(sessionStorage.getItem('ps_ultimo_notif') || '-1', 10);
+  let revBase = null, timer = null, avisoCambio = false;
+
+  const $ = id => document.getElementById(id);
+  const csrf = () => (document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken=')) || '').split('=')[1] || '';
+
+  function el(tag, cls, txt){ const e = document.createElement(tag); if(cls) e.className = cls; if(txt) e.textContent = txt; return e; }
+
+  function pintar(d){
+    const badge = $('nbell-badge'), bell = $('nbell');
+    badge.hidden = d.unread === 0;
+    badge.textContent = d.unread > 99 ? '99+' : d.unread;
+    bell.classList.toggle('has-new', d.unread > 0);
+    document.title = d.unread > 0 ? '(' + d.unread + ') ' + tituloOrig : tituloOrig;
+
+    const lista = $('npanel-list');
+    lista.replaceChildren();
+    if(!d.items.length){ lista.appendChild(el('div', 'npanel-empty', 'Sin notificaciones')); return; }
+    d.items.forEach(n => {
+      const b = el('button', 'nitem' + (n.leida ? '' : ' unread'));
+      b.type = 'button'; b.dataset.nivel = n.nivel || '';
+      const txt = el('div');
+      txt.append(el('div', 'nitem-t', n.titulo));
+      if(n.mensaje) txt.append(el('div', 'nitem-m', n.mensaje));
+      txt.append(el('div', 'nitem-h', 'hace ' + n.hace));
+      b.append(el('span', 'nitem-dot'), txt);
+      b.onclick = () => abrir(n);
+      lista.appendChild(b);
+    });
+  }
+
+  function aviso(n){
+    const t = el('div', 'ntoast'); t.dataset.nivel = n.nivel || '';
+    t.append(el('b', '', n.titulo));
+    if(n.mensaje) t.append(el('span', '', n.mensaje));
+    t.onclick = () => { t.remove(); abrir(n); };
+    $('ntoasts').appendChild(t);
+    setTimeout(() => t.remove(), n.nivel === 'critico' ? 20000 : 9000);
+    if(n.nivel === 'critico' && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }
+
+  async function marcar(cuerpo){
+    try{
+      await fetch(URL_LEER, {method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json', 'X-CSRFToken': csrf()}, body: JSON.stringify(cuerpo)});
+    }catch(e){}
+  }
+
+  async function abrir(n){
+    if(!n.leida) await marcar({ids:[n.id]});
+    if(n.url) location.href = n.url; else poll();
+  }
+
+  function hayBorrador(){
+    return [...document.querySelectorAll('main.page textarea, main.page input[type=text], main.page input[type=search]')]
+      .some(i => i.value && i.value.trim());
+  }
+
+  function huboCambios(rev){
+    revBase = rev;
+    if(!paginaViva) return;
+    if(!hayBorrador()){ location.reload(); return; }       // nadie está escribiendo → refrescar
+    if(avisoCambio) return;                                  // está escribiendo → avisar sin interrumpir
+    avisoCambio = true;
+    const t = el('div', 'ntoast'); t.dataset.nivel = 'medio';
+    t.append(el('b', '', 'Este reporte se actualizó'), el('span', '', 'Termina de escribir y actualiza para ver los cambios.'));
+    const b = el('button', '', 'Actualizar ahora'); b.onclick = () => location.reload();
+    t.append(b); $('ntoasts').appendChild(t);
+  }
+
+  async function poll(){
+    if(document.hidden) return;                              // pestaña en segundo plano: no consulta
+    try{
+      const r = await fetch(URL_API + (reporteId ? '?reporte=' + reporteId : ''),
+        {credentials:'same-origin', cache:'no-store', headers:{'Accept':'application/json'}});
+      if(r.status === 401){ clearInterval(timer); return; }   // sesión terminada
+      if(!r.ok) return;
+      const d = await r.json();
+      pintar(d);
+      if(ultimoId < 0){ ultimoId = d.max_id; }                // primera vez: no avisar de lo anterior
+      else{
+        d.items.filter(n => n.id > ultimoId && !n.leida).reverse().forEach(aviso);
+        if(d.max_id > ultimoId) ultimoId = d.max_id;
+      }
+      sessionStorage.setItem('ps_ultimo_notif', ultimoId);
+      if(revBase === null) revBase = d.rev;
+      else if(d.rev !== revBase) huboCambios(d.rev);
+    }catch(e){ /* sin red: se reintenta en el siguiente ciclo */ }
+  }
+
+  function toggle(ev){
+    ev.stopPropagation();
+    const p = $('npanel'), abierto = p.hidden;
+    p.hidden = !abierto; $('nbell').setAttribute('aria-expanded', String(abierto));
+    if(abierto) poll();
+  }
+  document.addEventListener('click', e => {
+    const p = $('npanel');
+    if(!p.hidden && !p.contains(e.target) && !$('nbell').contains(e.target)){ p.hidden = true; $('nbell').setAttribute('aria-expanded','false'); }
+  });
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) poll(); });
+
+  async function readAll(){ await marcar({all:true}); poll(); }
+
+  poll(); timer = setInterval(poll, POLL_MS);
+  return {toggle, readAll};
+})();
+</script>
 </body>
-</html>
+</html>

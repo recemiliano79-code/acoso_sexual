@@ -57,7 +57,11 @@ class ReporteForm(BaseStyleForm):
             'institucion',
             'descripcion',
             'fecha_suceso',
-            'lugar'
+            'lugar',
+            # Antes faltaban: el HTML los enviaba pero Django los ignoraba,
+            # por eso todos los reportes quedaban en "medio".
+            'nivel_urgencia',
+            'llamar_911',
         ]
         labels = {
             'tipo_acoso': 'Tipo de acoso',
@@ -69,3 +73,12 @@ class ReporteForm(BaseStyleForm):
             'fecha_suceso': forms.DateInput(attrs={'type': 'date'}), # Muestra el calendario
             'descripcion': forms.Textarea(attrs={'rows': 5}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Si el formulario no manda nivel, se usa el valor por defecto del modelo
+        self.fields['nivel_urgencia'].required = False
+        self.fields['llamar_911'].required = False
+
+    def clean_nivel_urgencia(self):
+        return self.cleaned_data.get('nivel_urgencia') or 'medio'

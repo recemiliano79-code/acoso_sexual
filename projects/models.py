@@ -118,6 +118,13 @@ class Reporte(models.Model):
         default=False,
         verbose_name="Solicitó contacto urgente"
     )
+    # Resultado de la clasificación automática (ver projects/risk.py)
+    puntaje_riesgo = models.PositiveSmallIntegerField(
+        default=0, verbose_name="Puntaje de riesgo (0-100)"
+    )
+    motivos_riesgo = models.CharField(
+        max_length=300, blank=True, verbose_name="Motivos del nivel de riesgo"
+    )
 
     # ── NUEVOS: Revisión ──────────────────────────────────────────
     revisado     = models.BooleanField(default=False, verbose_name="Revisado por admin")
@@ -202,3 +209,35 @@ class MensajeAdmin(models.Model):
 
     def __str__(self):
         return f"Msg #{self.pk} en Reporte #{self.reporte.pk}"
+
+
+# ==========================================
+# 7. NOTIFICACIONES (campana en la página)
+# ==========================================
+class Notificacion(models.Model):
+    TIPO_CHOICES = [
+        ('reporte_nuevo', 'Reporte nuevo'),
+        ('estado',        'Cambio de estado'),
+        ('nivel',         'Cambio de nivel de riesgo'),
+        ('mensaje',       'Mensaje nuevo'),
+        ('sistema',       'Sistema'),
+    ]
+
+    usuario   = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notificaciones')
+    reporte   = models.ForeignKey(Reporte, on_delete=models.CASCADE, null=True, blank=True,
+                                  related_name='notificaciones')
+    tipo      = models.CharField(max_length=20, choices=TIPO_CHOICES, default='sistema')
+    titulo    = models.CharField(max_length=200)
+    mensaje   = models.CharField(max_length=300, blank=True)
+    nivel     = models.CharField(max_length=10, blank=True)   # critico / alto / medio / bajo (solo color)
+    leida     = models.BooleanField(default=False)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering            = ['-id']
+        verbose_name        = 'Notificación'
+        verbose_name_plural = 'Notificaciones'
+        indexes             = [models.Index(fields=['usuario', 'leida'])]
+
+    def __str__(self):
+        return f"[{self.usuario.username}] {self.titulo}"

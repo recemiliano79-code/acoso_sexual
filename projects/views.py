@@ -2,7 +2,7 @@
 #  projects/views.py  — VERSIÓN COMPLETA v2
 # ══════════════════════════════════════════════════════════════════
 
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     ListView, CreateView, UpdateView, DeleteView, TemplateView, DetailView
 )
@@ -12,14 +12,60 @@ from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.utils import timezone
+from django.utils.timesince import timesince
 from django.http import JsonResponse
-from .models import Tip, TipoAcoso, Institucion, Reporte, Sugerencia, MensajeAdmin
+from django.db.models import Case, When, Value, IntegerField, Count, Max, Q
+import json
+from .models import Tip, TipoAcoso, Institucion, Reporte, Sugerencia, MensajeAdmin, Notificacion
 from .forms import TipForm, TipoAcosoForm, InstitucionForm, ReporteForm
+from .risk import calcular_riesgo, resumen_motivos, PISO_PUNTAJE, ETIQUETA
+from .notifications import (
+    notificar_reporte_nuevo, notificar_cambio_estado, notificar_cambio_nivel, notificar_mensaje,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────
 def _is_admin(user):
     return user.is_staff or user.username == 'recemilian79'
+
+
+# ── Orden por grado de riesgo ─────────────────────────────────────
+_ORDEN_URGENCIA = Case(
+    When(nivel_urgencia='critico', then=Value(0)),
+    When(nivel_urgencia='alto',    then=Value(1)),
+    When(nivel_urgencia='medio',   then=Value(2)),
+    default=Value(3), output_field=IntegerField(),
+)
+_CERRADO_AL_FINAL = Case(
+    When(status='cerrado', then=Value(1)),
+    default=Value(0), output_field=IntegerField(),
+)
+
+
+def ordenar_por_riesgo(qs):
+    """
+    Casos abiertos primero → de mayor a menor riesgo → los que pidieron
+    contacto urgente → sin revisar antes que revisados → más recientes.
+    """
+    return qs.annotate(_cerrado=_CERRADO_AL_FINAL, _urg=_ORDEN_URGENCIA).order_by(
+        '_cerrado', '_urg', '-llamar_911', 'revisado', '-creado_en'
+    )
+
+
+# ── Cambio de estado (un solo lugar para que todo quede coherente) ──
+def aplicar_estado(reporte, nuevo, actor, notificar=True):
+    """Devuelve True si hubo cambio. Al salir de 'nuevo' el reporte cuenta como revisado."""
+    if reporte.status == nuevo:
+        return False
+    reporte.status = nuevo
+    if nuevo != 'nuevo' and not reporte.revisado:
+        reporte.revisado     = True
+        reporte.revisado_por = actor
+        reporte.revisado_en  = timezone.now()
+    reporte.save()
+    if notificar:
+        notificar_cambio_estado(reporte, actor)
+    return True
 
 
 class SidebarMixin:
@@ -66,10 +112,12 @@ class DashboardView(LoginRequiredMixin, View):
                 'sugerencias_pend':  Sugerencia.objects.filter(estado='pendiente').count(),
                 'reportes_recientes':Reporte.objects.select_related('user').order_by('-creado_en')[:8],
                 'usuarios_recientes':User.objects.order_by('-date_joined')[:6],
-                'reportes_urgentes_list': Reporte.objects.filter(
-                    nivel_urgencia='critico', revisado=False
-                ).select_related('user').order_by('-creado_en')[:5],
-                'all_reportes':      Reporte.objects.select_related('user').order_by('-creado_en')[:20],
+                'reportes_urgentes_list': ordenar_por_riesgo(
+                    Reporte.objects.filter(revisado=False).filter(
+                        Q(nivel_urgencia='critico') | Q(llamar_911=True)
+                    ).select_related('user')
+                )[:5],
+                'all_reportes':      ordenar_por_riesgo(Reporte.objects.select_related('user'))[:20],
             }
             return render(request, 'projects/dashboard_admin.html', ctx)
         else:
@@ -98,11 +146,23 @@ class ReporteCreateView(SidebarMixin, LoginRequiredMixin, CreateView):
     success_url   = reverse_lazy('projects:reporte-list')
 
     def form_valid(self, form):
-        form.instance.user = self.request.user
-        if not form.instance.status:
-            form.instance.status = 'nuevo'
+        inst = form.instance
+        inst.user   = self.request.user
+        inst.status = 'nuevo'
+
+        # Grado de riesgo: lo que marcó la persona es el mínimo; el sistema puede subirlo
+        nivel, puntaje, motivos = calcular_riesgo(
+            descripcion  = inst.descripcion,
+            tipo_nombre  = inst.tipo_acoso.nombre if inst.tipo_acoso else '',
+            nivel_usuario= inst.nivel_urgencia,
+            llamar_911   = inst.llamar_911,
+        )
+        inst.nivel_urgencia = nivel
+        inst.puntaje_riesgo = puntaje
+        inst.motivos_riesgo = resumen_motivos(motivos)
+
         resp = super().form_valid(form)
-        nivel = form.instance.nivel_urgencia
+        notificar_reporte_nuevo(self.object)      # → campana de los administradores
         if nivel == 'critico':
             messages.error(self.request, '🚨 Reporte CRÍTICO enviado. El equipo lo atenderá con prioridad máxima.')
         elif nivel == 'alto':
@@ -119,13 +179,13 @@ class ReporteListView(SidebarMixin, LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         if _is_admin(self.request.user):
-            qs = Reporte.objects.select_related('user').order_by('-creado_en')
+            qs = Reporte.objects.select_related('user')
             nivel  = self.request.GET.get('nivel', '')
             estado = self.request.GET.get('revisado', '')
             if nivel:  qs = qs.filter(nivel_urgencia=nivel)
             if estado == '0': qs = qs.filter(revisado=False)
             if estado == '1': qs = qs.filter(revisado=True)
-            return qs
+            return ordenar_por_riesgo(qs)
         return Reporte.objects.filter(user=self.request.user).order_by('-creado_en')
 
     def get_context_data(self, **kwargs):
@@ -148,6 +208,7 @@ class ReporteDetailView(SidebarMixin, LoginRequiredMixin, View):
             return redirect('projects:reporte-list')
         # Marcar leídos
         MensajeAdmin.objects.filter(reporte=reporte, leido=False, es_del_admin=True).update(leido=True)
+        Notificacion.objects.filter(usuario=request.user, reporte=reporte, leida=False).update(leida=True)
 
         is_admin = _is_admin(request.user)
         ctx = {
@@ -163,26 +224,60 @@ class ReporteDetailView(SidebarMixin, LoginRequiredMixin, View):
         return render(request, 'projects/reporte_detail.html', ctx)
 
     def post(self, request, pk):
-        reporte = get_object_or_404(Reporte, pk=pk)
-        if not _is_admin(request.user) and reporte.user != request.user:
+        reporte  = get_object_or_404(Reporte, pk=pk)
+        es_admin = _is_admin(request.user)
+        if not es_admin and reporte.user != request.user:
             return redirect('projects:reporte-list')
+
+        # ── 1) El equipo cambia el estado ─────────────────────────
+        if es_admin and 'cambiar_status' in request.POST:
+            nuevo = request.POST.get('nuevo_status', '')
+            if nuevo not in dict(Reporte.STATUS_CHOICES):
+                messages.error(request, 'Estado no válido.')
+            elif aplicar_estado(reporte, nuevo, request.user):
+                messages.success(request, f'Estado actualizado: {reporte.get_status_display()}.')
+            else:
+                messages.info(request, 'El reporte ya tenía ese estado.')
+            return redirect('projects:reporte-detail', pk=pk)
+
+        # ── 2) El equipo corrige el nivel de riesgo ───────────────
+        if es_admin and 'cambiar_nivel' in request.POST:
+            nuevo = request.POST.get('nuevo_nivel', '')
+            if nuevo not in dict(Reporte.URGENCIA_CHOICES):
+                messages.error(request, 'Nivel no válido.')
+            elif nuevo != reporte.nivel_urgencia:
+                reporte.nivel_urgencia = nuevo
+                reporte.puntaje_riesgo = PISO_PUNTAJE[nuevo]
+                reporte.motivos_riesgo = resumen_motivos(
+                    [m for m in reporte.motivos_riesgo.split(' · ') if m and not m.startswith('Ajustado')]
+                    + [f'Ajustado por el equipo a {ETIQUETA[nuevo]}']
+                )
+                reporte.save()
+                notificar_cambio_nivel(reporte, request.user)
+                messages.success(request, f'Nivel de riesgo: {ETIQUETA[nuevo]}.')
+            return redirect('projects:reporte-detail', pk=pk)
+
+        # ── 3) Mensaje y/o "marcar como revisado" ─────────────────
         texto = request.POST.get('texto', '').strip()
         if texto:
             MensajeAdmin.objects.create(
-                reporte=reporte,
-                autor=request.user,
-                texto=texto,
-                es_del_admin=_is_admin(request.user),
+                reporte=reporte, autor=request.user, texto=texto, es_del_admin=es_admin,
             )
-            # Si admin marca revisado
-            if _is_admin(request.user) and request.POST.get('marcar_revisado'):
-                reporte.revisado    = True
-                reporte.revisado_por= request.user
-                reporte.revisado_en = timezone.now()
-                reporte.save()
-                messages.success(request, 'Reporte marcado como revisado.')
-            else:
-                messages.success(request, 'Mensaje enviado.')
+            notificar_mensaje(reporte, request.user, es_admin)
+            # Primera respuesta del equipo → el caso pasa solo a "En revisión"
+            if es_admin and reporte.status == 'nuevo':
+                aplicar_estado(reporte, 'revision', request.user, notificar=False)
+            messages.success(request, 'Mensaje enviado.')
+
+        if es_admin and request.POST.get('marcar_revisado') and not reporte.revisado:
+            reporte.revisado     = True
+            reporte.revisado_por = request.user
+            reporte.revisado_en  = timezone.now()
+            if reporte.status == 'nuevo':
+                reporte.status = 'revision'
+            reporte.save()
+            notificar_cambio_estado(reporte, request.user)
+            messages.success(request, 'Reporte marcado como revisado.')
         return redirect('projects:reporte-detail', pk=pk)
 
 
@@ -335,3 +430,73 @@ class SugerenciaRevisarView(LoginRequiredMixin, View):
         sug.revisado_por = request.user
         sug.save()
         return redirect('projects:sugerencias-admin')
+
+
+# ══════════════════════════════════════════════════════════════════
+#  NOTIFICACIONES EN TIEMPO CASI REAL  (la página consulta cada ~12 s)
+# ══════════════════════════════════════════════════════════════════
+
+def _rev(user, reporte_id=None):
+    """
+    Huella de lo que el usuario ve. Si cambia, la página sabe que
+    algún reporte o mensaje se actualizó.
+    """
+    if reporte_id:
+        rep = Reporte.objects.filter(pk=reporte_id).first()
+        if rep and (_is_admin(user) or rep.user_id == user.pk):
+            t = rep.actualizado_en.timestamp()
+            m = rep.mensajes.aggregate(m=Max('id'))['m'] or 0
+            return f'r{rep.pk}|{t}|{m}'
+    if _is_admin(user):
+        reps, msgs = Reporte.objects.all(), MensajeAdmin.objects.all()
+    else:
+        reps, msgs = Reporte.objects.filter(user=user), MensajeAdmin.objects.filter(reporte__user=user)
+    a = reps.aggregate(n=Count('id'), t=Max('actualizado_en'))
+    m = msgs.aggregate(m=Max('id'))['m'] or 0
+    return f"{a['n']}|{a['t'].timestamp() if a['t'] else 0}|{m}"
+
+
+def _serializar_notificacion(n):
+    return {
+        'id':     n.pk,
+        'tipo':   n.tipo,
+        'titulo': n.titulo,
+        'mensaje': n.mensaje,
+        'nivel':  n.nivel,
+        'leida':  n.leida,
+        'url':    reverse('projects:reporte-detail', kwargs={'pk': n.reporte_id}) if n.reporte_id else '',
+        'hace':   timesince(n.creado_en).split(',')[0],
+    }
+
+
+class NotificacionesAPIView(View):
+    """GET → notificaciones no leídas + huella de cambios. Responde 401 en JSON si no hay sesión."""
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'auth': False}, status=401)
+        qs = Notificacion.objects.filter(usuario=request.user)
+        reporte_id = request.GET.get('reporte')
+        resp = JsonResponse({
+            'unread': qs.filter(leida=False).count(),
+            'items':  [_serializar_notificacion(n) for n in qs.select_related('reporte')[:15]],
+            'max_id': qs.values_list('id', flat=True).first() or 0,
+            'rev':    _rev(request.user, int(reporte_id) if reporte_id and reporte_id.isdigit() else None),
+        })
+        resp['Cache-Control'] = 'no-store'
+        return resp
+
+
+class NotificacionesLeerAPIView(View):
+    """POST {"all": true} o {"ids": [1,2]} → marca como leídas solo las del usuario."""
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'auth': False}, status=401)
+        try:
+            data = json.loads(request.body or '{}')
+        except ValueError:
+            data = {}
+        qs = Notificacion.objects.filter(usuario=request.user, leida=False)
+        if not data.get('all'):
+            ids = [i for i in data.get('ids', []) if isinstance(i, int)]
+            qs = qs.filter(pk__in=ids)
+        return JsonResponse({'marcadas': qs.update(leida=True)})

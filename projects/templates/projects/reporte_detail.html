@@ -327,6 +327,20 @@
             <i class="fa-solid fa-arrows-rotate"></i> Actualizar estado
           </button>
         </form>
+        <form method="post" style="margin-top:12px;">
+          {% csrf_token %}
+          <div style="font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:6px;">Nivel de riesgo{% if reporte.puntaje_riesgo %} · puntaje {{ reporte.puntaje_riesgo }}/100{% endif %}:</div>
+          <select name="nuevo_nivel" style="width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(130,90,255,.18);border-radius:8px;padding:8px 11px;color:var(--text);font-size:.8rem;outline:none;margin-bottom:8px;cursor:pointer;">
+            <option value="critico" {% if reporte.nivel_urgencia == 'critico' %}selected{% endif %}>🔴 Crítico</option>
+            <option value="alto" {% if reporte.nivel_urgencia == 'alto' %}selected{% endif %}>🟠 Alto</option>
+            <option value="medio" {% if reporte.nivel_urgencia == 'medio' %}selected{% endif %}>🟡 Medio</option>
+            <option value="bajo" {% if reporte.nivel_urgencia == 'bajo' %}selected{% endif %}>🟢 Bajo / Informativo</option>
+          </select>
+          {% if reporte.motivos_riesgo %}<div style="font-size:.68rem;color:var(--muted);line-height:1.5;margin-bottom:8px;">Motivos: {{ reporte.motivos_riesgo }}</div>{% endif %}
+          <button type="submit" name="cambiar_nivel" value="1" style="width:100%;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.25);color:#fb923c;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .14s;">
+            <i class="fa-solid fa-gauge-high"></i> Actualizar nivel
+          </button>
+        </form>
         <div class="aab-grid" style="margin-top:10px;">
           <a href="{% url 'projects:reporte-list' %}" class="aab aab-b"><i class="fa-solid fa-list"></i> Ver todos</a>
           <a href="{% url 'projects:sugerencias-admin' %}" class="aab aab-v"><i class="fa-solid fa-inbox"></i> Sugerencias</a>
@@ -387,4 +401,4 @@
 const msgs=document.getElementById('chat-msgs');
 if(msgs)msgs.scrollTop=msgs.scrollHeight;
 </script>
-{% endblock %}
+{% endblock %}
